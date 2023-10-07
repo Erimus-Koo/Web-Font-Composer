@@ -21,6 +21,8 @@
         style="height: 100%; background: lightgreen; outline: 1px solid"
       />
     </div>
+    <resizeHandler />
+    <div id="last" style="background: rosybrown; border-left: 1px solid" />
   </div>
 </template>
 

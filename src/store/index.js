@@ -29,13 +29,13 @@ export const useStore = defineStore("form", {
         localFontName: "",
         googleFontName: "Barlow",
         fontWeightBias: "1",
-        characters: "1-23,45全聚/感ABC@abc+67.890%",
+        characters: "1234567890,.+-%/\\@",
       },
       // 添加更多字体项...
     ],
 
     // preview options
-    sampleText: "12345全聚感ABCabc67890",
+    sampleText: "1-23,45全聚/感ABC@abc+67.890%",
     fontSize: 30,
     isItalic: false,
 
