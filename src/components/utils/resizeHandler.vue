@@ -552,10 +552,11 @@ onMounted(() => {
     display: flex;
     justify-content: center;
     align-items: center;
-    // border: 1px solid red;
     padding: var(--gap);
     position: absolute;
     cursor: pointer;
+    z-index: -1;
+    // border: 1px solid red;
     opacity: 0;
     transform: scale(0);
     transition: opacity 0.3s, transform var(--fadeout) 0.3s;
@@ -591,10 +592,17 @@ onMounted(() => {
       }
     }
   }
+
+  // When the handler is hovered over, the collapse button appears
   &:hover .collapse-btn {
     opacity: 1;
     transform: scale(1);
+    // Transition delay, avoid the btn appearing while cursor is passing over
     transition: opacity 0.3s 0.5s, transform 0.3s var(--fadein) 0.5s;
+  }
+  // If the handler is already collapsed, there's no need for a delay
+  &.collapsed:hover .collapse-btn {
+    transition: opacity 0.3s, transform 0.3s var(--fadein);
   }
 
   &.LR .collapse-btn {
