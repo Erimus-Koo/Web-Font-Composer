@@ -21,7 +21,7 @@
     "
     ref="refHandler"
   >
-    <!-- display while mouse hove -->
+    <!-- display while mouse hover & expand hover area -->
     <div class="hover-indicator" />
 
     <!-- the collapse buttons -->
@@ -49,9 +49,9 @@ const props = withDefaults(
   {
     prevMinSize: 200,
     nextMinSize: 200,
-    size: 0,
-    hoverSize: 10,
-    color: "#333",
+    size: 10,
+    hoverSize: 20,
+    color: "#f009",
     indicatorSize: 4,
     indicatorColor: "#06f",
   }
@@ -366,7 +366,10 @@ const calcCollapseStatusOfAllSiblings = (handler) => {
     debug("size:", size, ele.id, i);
     if (size < 10) {
       debug("👻 Collapsed panel found:", ele);
-      ele.classList.add("panel-collapsed");
+      // Set very tiny panel to collapsed
+      if (!ele.classList.contains("resize-handlar")) {
+        ele.classList.add("panel-collapsed");
+      }
       // Set property of prev handler
       if (i > 0 && siblingList[i - 1].classList.contains("resize-handler")) {
         siblingList[i - 1].classList.add("next-panel-collapsed");
@@ -430,72 +433,84 @@ onMounted(() => {
   --fadein: cubic-bezier(0.25, 1, 0.75, 1.25);
   --fadeout: cubic-bezier(0.25, -0.25, 1, 1);
 }
+
 .resize-handler {
-  // background: #0b08;
+  --actual-size: var(--size); // Collapsed actual size
   flex: none !important;
-  position: relative;
   z-index: 99;
-  --actual-size: var(--size);
+  box-sizing: border-box;
+  background: var(--color);
   transition: width 0.2s, height 0.2s;
+
+  // For child element
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  // Ensure hover elements on top
+  &:hover {
+    z-index: 999999;
+  }
 
   // &::after = visible (normal status)
   // .hover-indicator (hover status)
-  &::after,
   .hover-indicator {
-    content: "";
-    display: block;
-    width: 100%;
-    height: 100%;
-  }
-  &::after {
-    background: var(--color);
-    transition: width 0.2s, height 0.2s;
-  }
-  &:hover {
-    z-index: 99999;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: var(--indicator-color);
+    opacity: 0.5;
+    transition: opacity 0.5s;
+
+    &,
+    &::after {
+      width: 100%;
+      height: 100%;
+      position: absolute; // bigger size than parent
+    }
+    &::after {
+      content: "";
+      display: block;
+      background: #0f09;
+      transition: width 0.2s, height 0.2s;
+    }
   }
 
-  // indicator line
-  .hover-indicator {
-    position: absolute;
-    background: var(--indicator-color);
-    opacity: 0;
-    transition: opacity 0.5s;
-  }
+  // show indicator
   &:hover .hover-indicator,
-  &:active .hover-indicator {
+  &:active .hover-indicator,
+  &:focus .hover-indicator {
     opacity: 1;
   }
 
   // Handler of LR
   &.LR {
-    padding: 0 calc(var(--hover-size) * 0.5);
-    margin: 0 calc(var(--hover-size) * -0.5);
-    top: 0;
-    right: 0;
+    width: var(--size);
     cursor: ew-resize;
-    &::after {
-      width: var(--size);
-    }
+    flex-direction: row; // for prev/next align setting
+
     .hover-indicator {
       width: var(--indicator-size);
-      left: calc(50% - var(--indicator-size) / 2);
+
+      &::after {
+        width: var(--hover-size);
+      }
     }
   }
 
   // Handler of TB
   &.TB {
-    padding: calc(var(--hover-size) * 0.5) 0;
-    margin: calc(var(--hover-size) * -0.5) 0;
-    left: 0;
-    bottom: 0;
+    height: var(--size);
     cursor: ns-resize;
-    &::after {
-      height: var(--size);
-    }
+    flex-direction: column; // for prev/next align setting
+
     .hover-indicator {
       height: var(--indicator-size);
-      top: calc(50% - var(--indicator-size) / 2);
+
+      &::after {
+        height: var(--hover-size);
+      }
     }
   }
 
@@ -505,39 +520,19 @@ onMounted(() => {
     --min-size: 4px;
     // Collapsed actual size
     --actual-size: max(var(--min-size), var(--size));
-    .hover-indicator {
-      margin: 0;
-    }
 
     &.LR {
-      &::after {
-        width: var(--actual-size);
-      }
-      &.prev-collapsed {
-        .hover-indicator {
-          right: 0;
-        }
-      }
-      &.next-collapsed {
-        .hover-indicator {
-          left: 0;
-        }
-      }
+      width: var(--actual-size);
     }
     &.TB {
-      &::after {
-        height: var(--actual-size);
-      }
-      &.prev-collapsed {
-        .hover-indicator {
-          bottom: 0;
-        }
-      }
-      &.next-collapsed {
-        .hover-indicator {
-          top: 0;
-        }
-      }
+      height: var(--actual-size);
+    }
+
+    &.prev-panel-collapsed {
+      justify-content: flex-end;
+    }
+    &.next-panel-collapsed {
+      justify-content: flex-start;
     }
   }
 

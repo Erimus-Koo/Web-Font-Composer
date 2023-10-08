@@ -8,7 +8,7 @@
       id="test-panel"
       style="
         width: 200px;
-        border-left: 1px solid;
+        border-left: 0px solid;
         display: flex;
         flex-flow: column nowrap;
         height: 100%;
@@ -16,13 +16,15 @@
     >
       <div id="top-panel" style="height: 100%" />
       <resizeHandler />
+      <div id="center-panel" style="height: 100%" />
+      <resizeHandler />
       <div
         id="bottom-panel"
-        style="height: 100%; background: lightgreen; outline: 1px solid"
+        style="height: 100%; background: lightgreen; outline: 0px solid"
       />
     </div>
     <resizeHandler />
-    <div id="last" style="background: rosybrown; border-left: 1px solid" />
+    <div id="last" style="background: rosybrown; border-left: 0px solid" />
   </div>
 </template>
 
@@ -53,7 +55,7 @@ import resizeHandler from "@/components/utils/resizeHandler.vue";
 
 #sidebar-wrapper {
   background: skyblue;
-  border-right: 1px solid;
+  // border-right: 1px solid;
 }
 
 #preview-wrapper {
