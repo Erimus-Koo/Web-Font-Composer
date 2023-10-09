@@ -38,20 +38,20 @@ const props = withDefaults(
     nextMinSize?: number; // the min size of panel (right/bottom)
 
     // normal status
-    size?: number;
-    hoverSize?: number; // extra size for hover, invisible, hoverable
-    color?: string;
+    size?: number; // The width/height of handler
+    hoverSize?: number; // Additional size for hover, invisible, take max val
+    color?: string; // The color of handler
 
     // hover indicator
-    indicatorSize?: number;
-    indicatorColor?: string;
+    indicatorSize?: number; // The width/height of indicator
+    indicatorColor?: string; // The color of indicator
   }>(),
   {
     prevMinSize: 200,
     nextMinSize: 200,
-    size: 10,
-    hoverSize: 20,
-    color: "#f009",
+    size: 1,
+    hoverSize: 10,
+    color: "#333",
     indicatorSize: 4,
     indicatorColor: "#06f",
   }
@@ -460,7 +460,8 @@ onMounted(() => {
     justify-content: center;
     align-items: center;
     background: var(--indicator-color);
-    opacity: 0.5;
+    // opacity: 0.1; // debug
+    opacity: 0;
     transition: opacity 0.5s;
 
     &,
@@ -472,12 +473,13 @@ onMounted(() => {
     &::after {
       content: "";
       display: block;
-      background: #0f09;
+      // background: #0f09;
       transition: width 0.2s, height 0.2s;
+      z-index: -1;
     }
   }
 
-  // show indicator
+  // Show indicator
   &:hover .hover-indicator,
   &:active .hover-indicator,
   &:focus .hover-indicator {
@@ -494,7 +496,7 @@ onMounted(() => {
       width: var(--indicator-size);
 
       &::after {
-        width: var(--hover-size);
+        width: max(var(--size), var(--hover-size));
       }
     }
   }
@@ -509,23 +511,42 @@ onMounted(() => {
       height: var(--indicator-size);
 
       &::after {
-        height: var(--hover-size);
+        height: max(var(--size), var(--hover-size));
       }
     }
   }
 
-  // Collapsed Panel
+  // Collapsed
   &.collapsed {
     // Collaspsed min size
-    --min-size: 4px;
-    // Collapsed actual size
+    --min-size: 2px;
+    // Collapsed actual size (avoid too thin, easily identifiable)
     --actual-size: max(var(--min-size), var(--size));
+    background: unset;
 
     &.LR {
       width: var(--actual-size);
+      .hover-indicator::after {
+        width: max(var(--indicator-size), var(--hover-size));
+      }
+      &.prev-panel-collapsed {
+        border-right: 1px solid var(--color);
+      }
+      &.next-panel-collapsed {
+        border-left: 1px solid var(--color);
+      }
     }
     &.TB {
       height: var(--actual-size);
+      .hover-indicator::after {
+        height: max(var(--indicator-size), var(--hover-size));
+      }
+      &.prev-panel-collapsed {
+        border-bottom: 1px solid var(--color);
+      }
+      &.next-panel-collapsed {
+        border-top: 1px solid var(--color);
+      }
     }
 
     &.prev-panel-collapsed {
@@ -552,12 +573,12 @@ onMounted(() => {
     cursor: pointer;
     z-index: -1;
     // border: 1px solid red;
+    // opacity: 0.5;
     opacity: 0;
     transform: scale(0);
     transition: opacity 0.3s, transform var(--fadeout) 0.3s;
 
-    // before = background
-    // after = arrow
+    // before = background, after = arrow
     &::before,
     &::after {
       content: "";
@@ -588,12 +609,17 @@ onMounted(() => {
     }
   }
 
+  // Maintain a small size while collapsed for easy activation.
+  &.collapsed .collapse-btn {
+    transform: scale(0.5);
+  }
+
   // When the handler is hovered over, the collapse button appears
   &:hover .collapse-btn {
     opacity: 1;
     transform: scale(1);
     // Transition delay, avoid the btn appearing while cursor is passing over
-    transition: opacity 0.3s 0.5s, transform 0.3s var(--fadein) 0.5s;
+    transition: opacity 0.2s 0.3s, transform 0.2s var(--fadein) 0.3s;
   }
   // If the handler is already collapsed, there's no need for a delay
   &.collapsed:hover .collapse-btn {
@@ -602,27 +628,28 @@ onMounted(() => {
 
   &.LR .collapse-btn {
     top: calc(50% - var(--edge-l) / 2 - var(--gap));
+    // before = background, after = arrow
     &::before {
       width: var(--edge-s);
       height: var(--edge-l);
-    }
-    &.prev {
-      right: calc(var(--actual-size) + var(--hover-size) / 2);
-      padding-right: var(--gap);
-    }
-    &.next {
-      left: calc(var(--actual-size) + var(--hover-size) / 2);
-      padding-left: var(--gap);
     }
     &::after {
       border-top: var(--arrow) solid transparent;
       border-bottom: var(--arrow) solid transparent;
     }
-    &.prev::after {
-      border-right: var(--arrow) solid;
+    &.prev {
+      right: calc(var(--actual-size));
+      transform-origin: right;
+      &::after {
+        border-right: var(--arrow) solid;
+      }
     }
-    &.next::after {
-      border-left: var(--arrow) solid;
+    &.next {
+      left: calc(var(--actual-size));
+      transform-origin: left;
+      &::after {
+        border-left: var(--arrow) solid;
+      }
     }
   }
   &.TB .collapse-btn {
@@ -631,23 +658,23 @@ onMounted(() => {
       width: var(--edge-l);
       height: var(--edge-s);
     }
-    &.prev {
-      bottom: calc(var(--actual-size) + var(--hover-size) / 2);
-      padding-bottom: var(--gap);
-    }
-    &.next {
-      top: calc(var(--actual-size) + var(--hover-size) / 2);
-      padding-top: var(--gap);
-    }
     &::after {
       border-left: var(--arrow) solid transparent;
       border-right: var(--arrow) solid transparent;
     }
-    &.prev::after {
-      border-bottom: var(--arrow) solid;
+    &.prev {
+      bottom: calc(var(--actual-size) + var(--hover-size) / 2);
+      transform-origin: bottom;
+      &::after {
+        border-bottom: var(--arrow) solid;
+      }
     }
-    &.next::after {
-      border-top: var(--arrow) solid;
+    &.next {
+      top: calc(var(--actual-size) + var(--hover-size) / 2);
+      transform-origin: top;
+      &::after {
+        border-top: var(--arrow) solid;
+      }
     }
   }
   // ------------------------------ Collapse Button - END
@@ -672,16 +699,16 @@ onMounted(() => {
   display: none;
 }
 
-// While dragging, prevent text be selected.
+// While dragging, prevent text be selected. Added to body.
 .on-dragging {
   &,
   & * {
     // pointer-events: none;
     user-select: none;
-    // color: red;
   }
 }
 
+// Apply animation to the panel while collapsing and expanding.
 .transition-size {
   transition: width var(--fadein) 0.5s, height var(--fadein) 0.5s !important;
 }
