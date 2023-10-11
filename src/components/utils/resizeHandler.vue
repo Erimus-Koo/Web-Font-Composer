@@ -17,7 +17,11 @@
       ';--indicator-size:' +
       indicatorSize +
       'px;--indicator-color:' +
-      indicatorColor
+      indicatorColor +
+      ';--collapsed-min-size:' +
+      collapsedMinSize +
+      'px;--collapsed-bg:' +
+      collapsedBg
     "
     ref="refHandler"
   >
@@ -45,6 +49,10 @@ const props = withDefaults(
     // hover indicator
     indicatorSize?: number; // The width/height of indicator
     indicatorColor?: string; // The color of indicator
+
+    // collapsed handler
+    collapsedMinSize?: number; // While collapsed, set a min size to indentify
+    collapsedBg?: string; // bg of collapsed hander, border is handler color
   }>(),
   {
     prevMinSize: 200,
@@ -52,8 +60,10 @@ const props = withDefaults(
     size: 1,
     hoverSize: 10,
     color: "#333",
-    indicatorSize: 4,
+    indicatorSize: 2,
     indicatorColor: "#06f",
+    collapsedMinSize: 4,
+    collapsedBg: "#fff",
   }
 );
 
@@ -141,8 +151,7 @@ function initHandler(
     // Prevent text be selected while mouse move
     document.body.classList.add("on-dragging");
 
-    setAllSiblingsSize(handler);
-    // ------------------------------ Write all siblings' size - END
+    setActualSizeOfSiblings(handler);
 
     // Get siblings
     prevRect = prevEle.getBoundingClientRect();
@@ -208,7 +217,7 @@ function initHandler(
       document.body.classList.remove("on-dragging");
 
       clearCollapseStatusOfAllSiblings(handler);
-      calcCollapseStatusOfAllSiblings(handler);
+      calcCollapseStatusOfSiblings(handler);
 
       // Save panel size
       saveAllSiblingsSize(handler);
@@ -293,7 +302,7 @@ function initHandler(
        * However, to ensure compatibility with older browsers,
        * it's necessary to add a class to the elements preceding the handler.*/
       clearCollapseStatusOfAllSiblings(handler);
-      calcCollapseStatusOfAllSiblings(handler);
+      calcCollapseStatusOfSiblings(handler);
       saveAllSiblingsSize(handler);
     }, 1000);
   };
@@ -334,37 +343,59 @@ const saveAllSiblingsSize = (handler) => {
  * ------------------------------ Write all siblings' size - START
  * Avoid flex getting wrong size due to other siblings
  * Flex automatically adjusts the size after it has been set, so setting the size one by one is not possible. For example, if the size of the first sibling is set to the current width, while the other siblings still have incorrect size properties, flex will calculate again and the size of the first sibling will change again. This process will continue for each sibling, resulting in incorrect sizes. After several iterations, the values will be very close to the correct sizes.
+ * Another problem is that the handler may have a different size than props.size due to flex properties. To resolve this, we need to set the handler size to a preset value and adjust the panel size based on the remaining space.
  */
-const setAllSiblingsSize = (handler) => {
-  const parentSize =
+const setActualSizeOfSiblings = (handler) => {
+  let parentSize =
     handler.parentElement?.getBoundingClientRect()[dimension] || 0;
   let sizeList: any[] = [];
   let siblingsSizeTotal = 0;
   // Get size of all siblings
-  getSiblings(handler).forEach((ele) => {
-    if (ele.classList.contains("resize-handler")) return;
+  getSiblings(handler, true).forEach((ele) => {
+    // Minus handler size (without flex)
+    if (ele.classList.contains("resize-handler")) {
+      const size = ele.classList.contains("collapsed")
+        ? props.collapsedMinSize
+        : props.size;
+      parentSize -= size;
+      return;
+    }
     const rect = ele.getBoundingClientRect();
-    const size = rect[dimension] > 10 ? rect[dimension] : 0;
+    const size = rect[dimension] <= 10 ? 0 : rect[dimension]; // collapse tiny
     sizeList.push({ ele: ele, size: size });
     siblingsSizeTotal += size; // fill parent container
     debug(`Set sibling [${ele.id}] ${dimension} = ${size}px`, ele, rect);
   });
   debug(`Sibling size total: ${siblingsSizeTotal} | ${parentSize}`);
-  // Set size of all siblings
-  const ratio = parentSize / siblingsSizeTotal;
-  sizeList.forEach((item) => {
-    item.ele.style[dimension] = item.size * ratio + "px";
-  });
-};
 
-const calcCollapseStatusOfAllSiblings = (handler) => {
+  /**
+   * Set size of all siblings
+   * Calculate  */
+
+  const ratio = parentSize / siblingsSizeTotal;
+  for (let i = 0; i < sizeList.length; i++) {
+    const item = sizeList[i];
+    let size = 0;
+    if (i < sizeList.length - 1) {
+      size = Math.round(item.size * ratio);
+      parentSize -= size;
+    } else {
+      size = parentSize; // The final panel uses all the remaining space
+    }
+    item.ele.style[dimension] = size + "px";
+  }
+};
+// ------------------------------ Write all siblings' size - END
+
+// ------------------------------ Modify siblings' collapsed status - START
+const calcCollapseStatusOfSiblings = (handler) => {
   const siblingList = getSiblings(handler, true);
   // debug("siblingList:", siblingList);
   for (let i = 0; i < siblingList.length; i++) {
     const ele = siblingList[i];
     const size = ele.getBoundingClientRect()[dimension];
     debug("size:", size, ele.id, i);
-    if (size < 10) {
+    if (size <= 10) {
       debug("👻 Collapsed panel found:", ele);
       // Set very tiny panel to collapsed
       if (!ele.classList.contains("resize-handlar")) {
@@ -385,7 +416,7 @@ const calcCollapseStatusOfAllSiblings = (handler) => {
       }
     }
   }
-  setAllSiblingsSize(handler);
+  setActualSizeOfSiblings(handler);
 };
 
 const clearCollapseStatusOfAllSiblings = (handler) => {
@@ -398,10 +429,11 @@ const clearCollapseStatusOfAllSiblings = (handler) => {
     ele.classList.remove(`panel-collapsed`); //on panel
   });
 };
+// ------------------------------ Modify siblings' collapsed status - END
 
+// ------------------------------ restore panel size - START
 const restorePanelSize = (handler) => {
   console.group("🍕载入面板尺寸");
-  const storedObj = loadSize(); //node.id: { width: node.style.width }
   const siblingList = getSiblings(handler);
   for (let ele of siblingList) {
     debug("ele:", ele, ele.id);
@@ -413,9 +445,11 @@ const restorePanelSize = (handler) => {
     }
   }
 
-  calcCollapseStatusOfAllSiblings(handler);
+  setActualSizeOfSiblings(handler);
+  calcCollapseStatusOfSiblings(handler);
   console.groupEnd();
 };
+// ------------------------------ restore panel size - END
 
 onMounted(() => {
   debug("🎯🎯🎯", refHandler.value);
@@ -518,11 +552,9 @@ onMounted(() => {
 
   // Collapsed
   &.collapsed {
-    // Collaspsed min size
-    --min-size: 2px;
     // Collapsed actual size (avoid too thin, easily identifiable)
-    --actual-size: max(var(--min-size), var(--size));
-    background: unset;
+    --actual-size: max(var(--collapsed-min-size), var(--size));
+    background: var(--collapsed-bg);
 
     &.LR {
       width: var(--actual-size);
@@ -549,11 +581,21 @@ onMounted(() => {
       }
     }
 
+    // Change the indicator position while collapsed
     &.prev-panel-collapsed {
       justify-content: flex-end;
     }
     &.next-panel-collapsed {
       justify-content: flex-start;
+    }
+    &.collapsed .hover-indicator {
+      margin: calc(var(--indicator-size) / -2);
+    }
+
+    // If both neighbors all collapsed, prevent drag
+    &.prev-panel-collapsed.next-panel-collapsed {
+      pointer-events: none;
+      user-select: none;
     }
   }
 
@@ -678,6 +720,12 @@ onMounted(() => {
     }
   }
   // ------------------------------ Collapse Button - END
+}
+
+// Collapse panel
+// Prevent size change while window size expand
+.panel-collapsed {
+  flex: none !important;
 }
 
 // The handlar after the collapsed element
