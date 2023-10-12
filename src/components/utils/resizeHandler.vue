@@ -72,28 +72,33 @@ const debug = (...args) => {
   console.debug("[📏]", ...args);
 };
 
-const refHandler = ref(); // element
-let direction = ""; // LR or TB
-let dimension = ""; // width or height
+const refHandler = ref(); // Element
+let direction: "LR" | "TB"; // LR or TB
+let dimension: "width" | "height"; // width or height
 
 // ------------------------------ store size - START
 const lsKey = "panelSize"; // local storage key of panel size
+type SizeObj = {
+  width?: number;
+  height?: number;
+};
+
 const loadSize = (
   panelId: string | null = null, //panel id
   key: string = lsKey //store name
-): Object => {
-  debug("Save: panelId=", panelId, "key=", key);
+): SizeObj => {
   const storedObj = JSON.parse(localStorage.getItem(key) || "{}");
   const result = panelId ? storedObj[panelId] || {} : storedObj;
-  debug("Load: panelId=", panelId, "key=", key, "result=", result);
+  // debug("Load: panelId=", panelId, "key=", key, "result=", result);
   return result;
 };
+
 const saveSize = (
   panelId: string, //panel id
-  sizeObj: Object, //size dictionary
+  sizeObj: SizeObj, //size dictionary
   key: string = lsKey //store name
 ): void => {
-  debug("Save: panelId=", panelId, "sizeObj=", sizeObj, "key=", key);
+  // debug("Save: panelId=", panelId, "sizeObj=", sizeObj, "key=", key);
   const storedObj = loadSize(null, key);
   storedObj[panelId] = sizeObj;
   localStorage.setItem(key, JSON.stringify(storedObj));
@@ -101,11 +106,9 @@ const saveSize = (
 // ------------------------------ store size - END
 
 // ------------------------------ drag - START
-// 拖动对象边缘改变其大小
-// TODO: 直接在JS内创建拖动把手 把方法直接添加到element上
 function initHandler(
   handler: HTMLElement, // element
-  collapseThreshold: number = 100 // if panel size less than this value, panel collapse
+  collapseThreshold: number = 100 // collapse if panel size less than this value
 ): void {
   console.group("drag event init", handler);
 
@@ -122,7 +125,8 @@ function initHandler(
   let start = 0; // Previous node top/left
   let end = window.innerWidth; // Next node bottom/right
 
-  const clamp = (v) =>
+  // Calculate the valid range while dragging
+  const clamp = (v: number): number =>
     Math.min(Math.max(v, start + props.prevMinSize), end - props.nextMinSize);
 
   // Determine the handler direction by siblings
@@ -140,6 +144,11 @@ function initHandler(
   handler.classList.add(direction);
   dimension = direction === "LR" ? "width" : "height";
   debug("handlerDirection:", direction, dimension, prevRect, nextRect);
+
+  // Check neighbors' id
+  if (!prevEle.id || !nextEle.id) {
+    console.warn("The neighbors of handler must have ID", prevEle, nextEle);
+  }
 
   // -------------------- Drag start - START
   const dragStart = () => {
@@ -175,7 +184,9 @@ function initHandler(
     // -------------------- Drag move - START
     const dragMove = (e) => {
       // Calculate siblings' size
-      const current = parseInt(direction === "LR" ? e.clientX : e.clientY);
+      debug("e.type:", e.type);
+      const src = e.type === "mousemove" ? e : e.touches[0];
+      const current = direction === "LR" ? src.clientX : src.clientY;
       let prevSize = prevRect[dimension];
       let nextSize = nextRect[dimension];
       if (
@@ -233,12 +244,13 @@ function initHandler(
   // -------------------- Drag start - END
 
   // -------------------- Collapse Previous - START
-  const collapsePanel = (e): void => {
-    debug("🎈🎈🎈🎈🎈", e, e.target.classList);
+  const collapsePanel = (e: Event): void => {
+    const targetEle = e.target as Element;
+    debug("🎈🎈🎈🎈🎈", e, targetEle.classList);
     e.stopPropagation();
     clearCollapseStatusOfAllSiblings(handler);
     // Get direction
-    const target = e.target.classList.contains("prev") ? "prev" : "next";
+    const target = targetEle.classList.contains("prev") ? "prev" : "next";
     debug("target:", target);
 
     // Collapse or Expand
@@ -292,7 +304,7 @@ function initHandler(
       nextEle.classList.remove("transition-size");
 
       // Set the properties of handler
-      handler.classList.add(`collapsed`);
+      handler.classList.add("collapsed");
       // Set the properties of siblings
       (target === "prev" ? prevEle : nextEle).classList.add(`panel-collapsed`);
 
@@ -308,36 +320,26 @@ function initHandler(
   };
   handler.querySelectorAll(".collapse-btn").forEach((btn) => {
     btn.addEventListener("click", collapsePanel);
-    btn.addEventListener("touchstart", collapsePanel);
   });
   // -------------------- Collapse Previous - END
 
   console.groupEnd();
 }
 
+// ------------------------------ Get all siblings - START
 const getSiblings = (e: HTMLElement, includeHander = false): HTMLElement[] => {
   let siblingList: HTMLElement[] = [];
   e = e.parentElement?.firstElementChild as HTMLElement;
-  // debug(`[Get siblingList] e:`, e);
   do {
-    if (!includeHander && e.classList.contains("resize-handler")) continue;
-    siblingList.push(e);
+    if (!includeHander && e?.classList.contains("resize-handler")) continue;
+    if (e !== undefined) {
+      siblingList.push(e);
+    }
   } while ((e = e?.nextElementSibling as HTMLElement));
-  debug("siblingList:", siblingList);
+  debug(`👬🏻 siblingList(${includeHander}):`, siblingList);
   return siblingList;
 };
-
-const saveAllSiblingsSize = (handler) => {
-  const siblingList = getSiblings(handler);
-  for (let ele of siblingList) {
-    if (ele.id) {
-      debug("ele.id:", ele.id, direction);
-      let sizeInfo = {};
-      sizeInfo[dimension] = ele.style[dimension];
-      saveSize(ele.id, sizeInfo);
-    }
-  }
-};
+// ------------------------------ Get all siblings - END
 
 /**
  * ------------------------------ Write all siblings' size - START
@@ -345,10 +347,10 @@ const saveAllSiblingsSize = (handler) => {
  * Flex automatically adjusts the size after it has been set, so setting the size one by one is not possible. For example, if the size of the first sibling is set to the current width, while the other siblings still have incorrect size properties, flex will calculate again and the size of the first sibling will change again. This process will continue for each sibling, resulting in incorrect sizes. After several iterations, the values will be very close to the correct sizes.
  * Another problem is that the handler may have a different size than props.size due to flex properties. To resolve this, we need to set the handler size to a preset value and adjust the panel size based on the remaining space.
  */
-const setActualSizeOfSiblings = (handler) => {
+const setActualSizeOfSiblings = (handler: HTMLElement) => {
   let parentSize =
     handler.parentElement?.getBoundingClientRect()[dimension] || 0;
-  let sizeList: any[] = [];
+  let sizeList: { ele: HTMLElement; size: number }[] = [];
   let siblingsSizeTotal = 0;
   // Get size of all siblings
   getSiblings(handler, true).forEach((ele) => {
@@ -388,13 +390,14 @@ const setActualSizeOfSiblings = (handler) => {
 // ------------------------------ Write all siblings' size - END
 
 // ------------------------------ Modify siblings' collapsed status - START
-const calcCollapseStatusOfSiblings = (handler) => {
+const calcCollapseStatusOfSiblings = (handler: HTMLElement) => {
   const siblingList = getSiblings(handler, true);
   // debug("siblingList:", siblingList);
   for (let i = 0; i < siblingList.length; i++) {
     const ele = siblingList[i];
+    if (ele.classList.contains("resize-handlar")) continue; //watch panels only
     const size = ele.getBoundingClientRect()[dimension];
-    debug("size:", size, ele.id, i);
+    // debug("size:", size, ele.id, i);
     if (size <= 10) {
       debug("👻 Collapsed panel found:", ele);
       // Set very tiny panel to collapsed
@@ -419,42 +422,59 @@ const calcCollapseStatusOfSiblings = (handler) => {
   setActualSizeOfSiblings(handler);
 };
 
-const clearCollapseStatusOfAllSiblings = (handler) => {
+const clearCollapseStatusOfAllSiblings = (handler: HTMLElement) => {
   // Add class is forEach, so clear class if for each too.
   getSiblings(handler, true).forEach((ele) => {
-    debug("ele:", ele);
-    ele.classList.remove(`collapsed`); // on handler
-    ele.classList.remove(`prev-panel-collapsed`); // on handler
-    ele.classList.remove(`next-panel-collapsed`); // on handler
-    ele.classList.remove(`panel-collapsed`); //on panel
+    if (ele) {
+      ele.classList.remove("collapsed"); // on handler
+      ele.classList.remove("prev-panel-collapsed"); // on handler
+      ele.classList.remove("next-panel-collapsed"); // on handler
+      ele.classList.remove("panel-collapsed"); //on panel
+    }
   });
 };
 // ------------------------------ Modify siblings' collapsed status - END
 
-// ------------------------------ restore panel size - START
-const restorePanelSize = (handler) => {
-  console.group("🍕载入面板尺寸");
+// ------------------------------ Store & Restore Panel Size - START
+const saveAllSiblingsSize = (handler: HTMLElement): void => {
+  console.group("💾 Save All Siblings' Size");
+  const siblingList = getSiblings(handler);
+  for (let ele of siblingList) {
+    if (ele.id) {
+      let sizeInfo: SizeObj = {
+        [dimension]: ele.getBoundingClientRect()[dimension],
+      };
+      saveSize(ele.id, sizeInfo);
+      // debug(`Save Size: ele.id=${ele.id}`, sizeInfo);
+    }
+  }
+  debug(loadSize());
+  console.groupEnd();
+};
+
+const restorePanelSize = (handler: HTMLElement) => {
+  console.group("🍕 Restore panel size");
   const siblingList = getSiblings(handler);
   for (let ele of siblingList) {
     debug("ele:", ele, ele.id);
     const styleDict = loadSize(ele.id);
     if (styleDict) {
       for (let styleName in styleDict) {
-        ele.style[styleName] = styleDict[styleName];
+        ele.style[styleName] = styleDict[styleName] + "px";
       }
     }
   }
 
-  setActualSizeOfSiblings(handler);
   calcCollapseStatusOfSiblings(handler);
   console.groupEnd();
 };
-// ------------------------------ restore panel size - END
+// ------------------------------ Store & Restore Panel Size - END
 
 onMounted(() => {
-  debug("🎯🎯🎯", refHandler.value);
+  debug("🎯🎯🎯 Mounted", refHandler.value);
+
   // Add event/listener to handler
-  initHandler(refHandler.value as HTMLElement);
+  initHandler(refHandler.value);
 
   // Restore panel size
   restorePanelSize(refHandler.value);
@@ -483,8 +503,14 @@ onMounted(() => {
   align-items: center;
 
   // Ensure hover elements on top
-  &:hover {
+  // active = ondrag, but not hover
+  &:hover,
+  &:active,
+  &:focus {
     z-index: 999999;
+    .hover-indicator {
+      opacity: 1;
+    }
   }
 
   // &::after = visible (normal status)
@@ -511,13 +537,6 @@ onMounted(() => {
       transition: width 0.2s, height 0.2s;
       z-index: -1;
     }
-  }
-
-  // Show indicator
-  &:hover .hover-indicator,
-  &:active .hover-indicator,
-  &:focus .hover-indicator {
-    opacity: 1;
   }
 
   // Handler of LR
@@ -614,10 +633,10 @@ onMounted(() => {
     position: absolute;
     cursor: pointer;
     z-index: -1;
-    // border: 1px solid red;
-    // opacity: 0.5;
-    opacity: 0;
-    transform: scale(0);
+    // border: 1px solid red; //debug
+    // opacity: 0.5; //debug
+    opacity: 0; //product
+    transform: scale(0); //product
     transition: opacity 0.3s, transform var(--fadeout) 0.3s;
 
     // before = background, after = arrow
@@ -680,14 +699,14 @@ onMounted(() => {
       border-bottom: var(--arrow) solid transparent;
     }
     &.prev {
-      right: calc(var(--actual-size));
+      right: var(--actual-size);
       transform-origin: right;
       &::after {
         border-right: var(--arrow) solid;
       }
     }
     &.next {
-      left: calc(var(--actual-size));
+      left: var(--actual-size);
       transform-origin: left;
       &::after {
         border-left: var(--arrow) solid;
@@ -705,14 +724,14 @@ onMounted(() => {
       border-right: var(--arrow) solid transparent;
     }
     &.prev {
-      bottom: calc(var(--actual-size) + var(--hover-size) / 2);
+      bottom: var(--actual-size);
       transform-origin: bottom;
       &::after {
         border-bottom: var(--arrow) solid;
       }
     }
     &.next {
-      top: calc(var(--actual-size) + var(--hover-size) / 2);
+      top: var(--actual-size);
       transform-origin: top;
       &::after {
         border-top: var(--arrow) solid;
