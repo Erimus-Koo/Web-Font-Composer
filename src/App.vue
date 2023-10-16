@@ -3,7 +3,7 @@
     <Sidebar id="sidebar-wrapper" />
     <resizeHandler />
     <Preview id="preview-wrapper" />
-    <resizeHandler :prevMinSize="500" />
+    <resizeHandler />
     <div
       id="test-panel"
       style="
@@ -60,6 +60,6 @@ import resizeHandler from "@/components/utils/resizeHandler.vue";
 
 #preview-wrapper {
   width: 100%;
-  // min-width: 500px;
+  min-width: 500px;
 }
 </style>

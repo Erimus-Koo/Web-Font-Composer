@@ -25,12 +25,12 @@ const store = useStore();
 #preview-option-wrapper {
   position: sticky;
   top: 0;
-  padding: 0 1rem;
-  height: var(--tab-height);
-  line-height: var(--tab-height);
+  padding: 0.5rem 1rem;
+  // height: var(--tab-height);
+  line-height: calc(var(--tab-height) - 1rem);
   display: grid;
-  grid-template-columns: 1fr auto auto;
-  grid-gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(10ch, 2fr));
+  grid-gap: 0.5rem 1rem;
   align-items: center;
   background: #06fc;
   color: #fff;
@@ -39,6 +39,7 @@ const store = useStore();
   label {
     display: flex;
     align-items: center;
+    height: calc(var(--tab-height) - 1rem);
   }
   input {
     height: var(--input-height);
@@ -46,6 +47,7 @@ const store = useStore();
 }
 .sample-text {
   display: grid !important;
+  grid-column: span 2;
   grid-template-columns: 12ch 1fr;
   input {
     width: 100%;
