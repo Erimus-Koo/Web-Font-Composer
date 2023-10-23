@@ -17,11 +17,7 @@
       ';--indicator-size:' +
       indicatorSize +
       'px;--indicator-color:' +
-      indicatorColor +
-      ';--collapsed-min-size:' +
-      collapsedMinSize +
-      'px;--collapsed-bg:' +
-      collapsedBg
+      indicatorColor
     "
     ref="refHandler"
   >
@@ -38,8 +34,8 @@
       />
 
       <!-- info -->
-      <div class="prev-info">{{ props.prevMinSize }}</div>
-      <div class="next-info">{{ props.nextMinSize }}</div>
+      <div class="panel-info prev"></div>
+      <div class="panel-info next"></div>
     </div>
   </div>
 </template>
@@ -58,33 +54,44 @@ const props = withDefaults(
     indicatorColor?: string; // The color of indicator
 
     // collapsed handler
-    collapsedMinSize?: number; // While collapsed, set a min size to indentify
-    collapsedBg?: string; // bg of collapsed hander, border is handler color
+    collapseThreshold?: number; // Panel collapse when smaller than this size
 
     // adjacent elements
-    prevMinSize?: number; // the min size of panel (left/top)
-    nextMinSize?: number; // the min size of panel (right/bottom)
+    collapsedSize?: number; // While collapsed, set a min size to indentify
+    collapsedBg?: string; // BG of collapsed hander, border is handler color
+
     prevCollapsible?: boolean;
     nextCollapsible?: boolean;
+
+    /** Resize Adjacent Element Only
+     * The main difference is about the size limit panel
+     * e.g. start=100, left panel w=200, right panel w/min-w=200, end=500
+     * If true, the other panels will be frozen. The handler for moving right may appear to not work because it reaches the min-width of the right panel.
+     * If false, the other panels can be resized. For instance, moving the handler from 300 to 400 will cause the left panel to expand. However, due to flex, the width may not be exact.*/
+    freezeOtherPanel?: boolean;
   }>(),
   {
-    size: 1,
+    size: 10,
     hoverSize: 10,
     color: "#333",
     indicatorSize: 2,
     indicatorColor: "#06f",
-    collapsedMinSize: 4,
-    collapsedBg: "#fff",
-    prevMinSize: 0,
-    nextMinSize: 0,
+    collapseThreshold: 100,
+    collapsedSize: 10,
+    collapsedBg: "#f00",
     prevCollapsible: true,
     nextCollapsible: true,
+    freezeOtherPanel: false,
   }
 );
 
 const refHandler = ref(); // Element
 let direction: "LR" | "TB"; // LR or TB
 let dimension: "width" | "height"; // width or height
+let prevCollapsedSize: number;
+let nextCollapsedSize: number;
+let prevMinSize: number;
+let nextMinSize: number;
 
 // ------------------------------ store size - START
 const lsKey = "panelSize"; // local storage key of panel size
@@ -119,8 +126,7 @@ const saveSize = (
 
 // ------------------------------ drag - START
 const initHandler = (
-  handler: HTMLElement, // element
-  collapseThreshold: number = 100 // collapse if panel size less than this value
+  handler: HTMLElement // element
 ): void => {
   console.group("Init handler", handler);
 
@@ -150,8 +156,8 @@ const initHandler = (
   console.debug("[0]Next Handler:", nextHdl);
 
   // init info box
-  let prevInfo = handler.querySelector(".prev-info") as HTMLElement;
-  let nextInfo = handler.querySelector(".next-info") as HTMLElement;
+  let prevInfo = handler.querySelector(".panel-info.prev") as HTMLElement;
+  let nextInfo = handler.querySelector(".panel-info.next") as HTMLElement;
 
   // Define vaiables and common functions
   let start = 0; // Previous node top/left
@@ -178,27 +184,6 @@ const initHandler = (
     console.warn("The neighbors of handler must have ID", prevEle, nextEle);
   }
 
-  // Update global start & end value
-  const updatePaenlRectSize = () => {
-    prevRect = prevEle.getBoundingClientRect();
-    nextRect = nextEle.getBoundingClientRect();
-    if (direction === "LR") {
-      start = prevRect.x;
-      end = nextRect.x + nextRect.width;
-    } else if (direction === "TB") {
-      start = prevRect.y;
-      end = nextRect.y + nextRect.height;
-    }
-  };
-
-  // Update info of panel sizes
-  const updateInfo = () => {
-    prevRect = prevEle.getBoundingClientRect();
-    nextRect = nextEle.getBoundingClientRect();
-    prevInfo.textContent = `${Math.round(prevRect[dimension] * 100) / 100}`;
-    nextInfo.textContent = `${Math.round(nextRect[dimension] * 100) / 100}`;
-  };
-
   // ------------------------------ Get all siblings - START
   const getSiblings = (): HTMLElement[] => {
     let siblingList: HTMLElement[] = [];
@@ -213,6 +198,65 @@ const initHandler = (
     return siblingList;
   };
   // ------------------------------ Get all siblings - END
+
+  // ------------------------------ Create collapsed panel's view - START
+  // panel-collapsed-view is a special div only display when panel is collapsed
+  getSiblings().forEach((ele) => {
+    if (isHandler(ele)) return; //skip handler
+    if (ele.querySelector(".panel-collapsed-view")) return; // skip view existed
+    // Create div
+    let collapsedPanelView = document.createElement("div");
+    collapsedPanelView.classList.add("panel-collapsed-view");
+    ele.appendChild(collapsedPanelView);
+  });
+  // ------------------------------ Create collapsed panel's view - END
+
+  // ------------------------------ Update size of adjacent elements - START
+  const updatePanelRectSize = () => {
+    prevRect = prevEle.getBoundingClientRect();
+    nextRect = nextEle.getBoundingClientRect();
+    if (direction === "LR") {
+      start = prevRect.x;
+      end = nextRect.x + nextRect.width;
+    } else if (direction === "TB") {
+      start = prevRect.y;
+      end = nextRect.y + nextRect.height;
+    }
+
+    const prevPropCollapsedSize = prevEle.getAttribute("data-collapsed-size");
+    prevCollapsedSize = prevPropCollapsedSize
+      ? parseInt(prevPropCollapsedSize)
+      : 0;
+    const nextPropCollapsedSize = nextEle.getAttribute("data-collapsed-size");
+    nextCollapsedSize = nextPropCollapsedSize
+      ? parseInt(nextPropCollapsedSize)
+      : 0;
+    console.debug(
+      "prevCollapsedSize:",
+      prevCollapsedSize,
+      "nextCollapsedSize:",
+      nextCollapsedSize
+    );
+
+    const prevPropMinSize = prevEle.getAttribute("data-min-size");
+    prevMinSize = prevPropMinSize ? parseInt(prevPropMinSize) : 0;
+    const nextPropMinSize = nextEle.getAttribute("data-min-size");
+    nextMinSize = nextPropMinSize ? parseInt(nextPropMinSize) : 0;
+    // const attribute = dimension === "width" ? "minWidth" : "minHeight";
+    // prevEle.style[attribute] = `${prevMinSize}px`;
+    // nextEle.style[attribute] = `${nextMinSize}px`;
+  };
+  updatePanelRectSize();
+  // ------------------------------ Update size of adjacent elements - END
+
+  // ------------------------------ Update info content - START
+  const updateInfo = () => {
+    prevRect = prevEle.getBoundingClientRect();
+    nextRect = nextEle.getBoundingClientRect();
+    prevInfo.textContent = `${Math.round(prevRect[dimension] * 100) / 100}`;
+    nextInfo.textContent = `${Math.round(nextRect[dimension] * 100) / 100}`;
+  };
+  // ------------------------------ Update info content - END
 
   // ------------------------------ Collapse & Expand Panel - START
   const clearCollapsePropertiesOfAdjacent = () => {
@@ -252,23 +296,28 @@ const initHandler = (
     const targetEle = collapseDirection === "prev" ? prevEle : nextEle;
     const anotherEle = collapseDirection === "next" ? prevEle : nextEle;
     const targetHdl = collapseDirection === "prev" ? prevHdl : nextHdl;
-    const targetHdlNoChange =
-      !targetHdl ||
-      targetHdl?.classList.contains(`${collapseDirection}-panel-collapsed`);
+    const targetMinSize =
+      collapseDirection === "prev" ? prevCollapsedSize : nextCollapsedSize;
+    let hdlChange = 0;
+    if (!targetHdl) {
+      hdlChange = 0; // on window edge, no handler
+    } else if (
+      targetHdl?.classList.contains(`${collapseDirection}-panel-collapsed`)
+    ) {
+      hdlChange = props.size; // Target handler already collapsed
+    } else {
+      hdlChange = props.collapsedSize; // Target handler is not collapsed
+    }
     const oppositeDirection = collapseDirection === "prev" ? "next" : "prev";
-    const fullSize =
-      end -
-      start -
-      props.collapsedMinSize -
-      (targetHdlNoChange ? 0 : props.collapsedMinSize - props.size);
-    const targetSize = 0;
-    const anotherSize = fullSize;
+    const fullSize = end - start - props.collapsedSize - hdlChange;
+    const targetSize = targetMinSize;
+    const anotherSize = fullSize - targetSize;
     targetEle.style[dimension] = `${targetSize}px`;
     anotherEle.style[dimension] = `${anotherSize}px`;
     console.debug(
-      `targetHdlNoChange:${targetHdlNoChange} ` +
+      `hdlChange:${hdlChange} ` +
         `start:${start} end:${end} end-start:${end - start} ` +
-        `full:${fullSize} target:${targetSize} another:${fullSize - targetSize}`
+        `full:${fullSize} target:${targetSize} another:${anotherSize}`
     );
 
     // Change styles (if panel has min-size, panel won't be collapsed)
@@ -289,29 +338,32 @@ const initHandler = (
     const targetEle = collapseDirection === "prev" ? nextEle : prevEle;
     const anotherEle = collapseDirection === "next" ? nextEle : prevEle;
     const targetHdl = collapseDirection === "prev" ? nextHdl : prevHdl;
-    const targetHdlNoChange =
-      !targetHdl ||
-      (targetHdl?.classList.contains(`prev-panel-collapsed`) &&
-        targetHdl?.classList.contains(`next-panel-collapsed`));
-    const fullSize =
-      end -
-      start -
-      props.size +
-      (targetHdlNoChange ? 0 : props.collapsedMinSize - props.size); // handler changes
+    const oppositeDirection = collapseDirection === "prev" ? "next" : "prev";
+    let hdlChange = 0;
+    if (!targetHdl) {
+      hdlChange = 0; // on window edge, no handler
+    } else if (
+      targetHdl?.classList.contains(`${oppositeDirection}-panel-collapsed`)
+    ) {
+      hdlChange = props.size; // Target handler already collapsed
+    } else {
+      hdlChange = props.collapsedSize; // Target handler is not collapsed
+    }
+    const fullSize = end - start - props.size + hdlChange; // handler changes
 
     // Read stored size
     const storedSize = loadSize(targetEle.id, lsBeforeCollapseKey)[dimension];
-    const minSize = Math.min(fullSize / 2, collapseThreshold);
+    const minSize = Math.min(fullSize / 2, props.collapseThreshold);
     const targetSize = Math.round(
       !storedSize || // no stored size
-        (storedSize && storedSize >= fullSize - collapseThreshold) // invalid
+        (storedSize && storedSize >= fullSize - props.collapseThreshold) // invalid
         ? minSize // set as min size
         : Math.round(Math.max(storedSize, minSize))
     );
     targetEle.style[dimension] = targetSize + "px";
     anotherEle.style[dimension] = fullSize - targetSize + "px";
     console.debug(
-      `storedSize:${storedSize} targetHdlNoChange:${targetHdlNoChange} ` +
+      `storedSize:${storedSize} hdlChange:${hdlChange} ` +
         `start:${start} end:${end} end-start:${end - start} ` +
         `full:${fullSize} target:${targetSize} another:${fullSize - targetSize}`
     );
@@ -335,10 +387,13 @@ const initHandler = (
     handler.classList.add("dragging");
 
     setActualSizeOfSiblings();
-    freezeNonAdjacentElements("freeze");
+
+    if (props.freezeOtherPanel) {
+      freezeNonAdjacentElements("freeze");
+    }
 
     // Get start/end of siblings
-    updatePaenlRectSize();
+    updatePanelRectSize();
     // console.debug("[1]Prev Node:", prevEle, prevRect);
     // console.debug("[1]Next Node:", nextEle, nextRect);
     console.debug("direction:", direction, [start, end]);
@@ -347,15 +402,11 @@ const initHandler = (
     updateInfo();
 
     // Store panel size (if dragged to collapsed, store it for expanding)
-    for (let ele of [prevEle, nextEle]) {
-      const size = ele.getBoundingClientRect()[dimension];
-      if (size === 0) continue;
-      saveSize(ele.id, { [dimension]: size }, lsBeforeCollapseKey);
-    }
+    saveAdjacentSize();
 
     // Calculate the valid range while dragging
     const clamp = (v: number): number =>
-      Math.min(Math.max(v, start + props.prevMinSize), end - props.nextMinSize);
+      Math.min(Math.max(v, start + prevMinSize), end - nextMinSize - 1);
 
     // -------------------- Drag move - START
     const dragMove = (e: MouseEvent | TouchEvent) => {
@@ -370,8 +421,8 @@ const initHandler = (
       let prevSize;
       let nextSize;
       if (
-        start + collapseThreshold <= current &&
-        current <= end - collapseThreshold
+        start + props.collapseThreshold <= current &&
+        current <= end - props.collapseThreshold
       ) {
         // Between the sublings
         prevSize = Math.round(clamp(current - halfSize) - start);
@@ -382,9 +433,15 @@ const initHandler = (
         clearCollapsePropertiesOfAdjacent();
       } else {
         let sizeDict = {};
-        if (current < start + collapseThreshold && props.prevCollapsible) {
+        if (
+          current < start + props.collapseThreshold &&
+          props.prevCollapsible
+        ) {
           sizeDict = collapsePanel("prev");
-        } else if (current > end - collapseThreshold && props.nextCollapsible) {
+        } else if (
+          current > end - props.collapseThreshold &&
+          props.nextCollapsible
+        ) {
           sizeDict = collapsePanel("next");
         }
         prevSize = sizeDict["prevSize"];
@@ -434,13 +491,13 @@ const initHandler = (
     const btnEle = e.target as Element;
     // console.debug("🎈 Collapse Btn", e, btnEle.classList);
     e.stopPropagation();
-    freezeNonAdjacentElements("freeze");
+    // freezeNonAdjacentElements("freeze");
 
     // Get direction
     const btnDir = btnEle.classList.contains("prev") ? "prev" : "next";
     console.debug("Collapse btn direction:", btnDir);
 
-    updatePaenlRectSize();
+    updatePanelRectSize();
     console.debug(
       `Size: Prev=${prevRect[dimension]} | Next=${nextRect[dimension]}`,
       prevRect,
@@ -448,21 +505,16 @@ const initHandler = (
     );
 
     // Collapse or Expand
-    if (prevRect[dimension] < 10 || nextRect[dimension] < 10) {
+    if (
+      prevRect[dimension] < prevCollapsedSize + 10 ||
+      nextRect[dimension] < nextCollapsedSize + 10
+    ) {
       console.debug(`✅ Expand -> ${btnDir}`); // expand --------------------
       expandPanel(btnDir);
     } else {
       console.debug(`✅ Collapse -> ${btnDir}`); // collapse --------------------
       // Store the size of expand status
-      const targetEle = btnDir === "prev" ? prevEle : nextEle;
-      let sizeInfo: SizeObj = {
-        [dimension]: targetEle.getBoundingClientRect()[dimension],
-      };
-      for (let ele of [prevEle, nextEle]) {
-        const size = ele.getBoundingClientRect()[dimension];
-        if (size === 0) continue;
-        saveSize(ele.id, { [dimension]: size }, lsBeforeCollapseKey);
-      }
+      saveAdjacentSize();
 
       collapsePanel(btnDir);
     }
@@ -486,7 +538,7 @@ const initHandler = (
        * However, to ensure compatibility with older browsers,
        * it's necessary to add a class to the elements preceding the handler.*/
       setCollapseStatusOfSiblings();
-      freezeNonAdjacentElements("unfreeze");
+      // freezeNonAdjacentElements("unfreeze");
       saveAllPanelsSize();
     }, 1000);
   };
@@ -504,8 +556,8 @@ const initHandler = (
   const setActualSizeOfSiblings = () => {
     console.group("Set Actual Size of Siblings");
     let parentSize = 0;
-    let zeroSizeList: { ele: HTMLElement; size: number }[] = [];
-    let nonZeroSizeList: { ele: HTMLElement; size: number }[] = [];
+    let collapsedPanelList: { ele: HTMLElement; size: number }[] = [];
+    let expandedPanelList: { ele: HTMLElement; size: number }[] = [];
     let siblingsSizeTotal = 0;
     // Get size of all siblings
     getSiblings().forEach((ele) => {
@@ -514,11 +566,14 @@ const initHandler = (
 
       const rect = ele.getBoundingClientRect();
       parentSize += rect[dimension];
-      const size = rect[dimension] <= 10 ? 0 : rect[dimension]; // collapse tiny
-      if (size === 0) {
-        zeroSizeList.push({ ele: ele, size: size });
+      const size =
+        rect[dimension] <= props.collapsedSize + 10
+          ? props.collapsedSize
+          : rect[dimension]; // collapse tiny
+      if (size === props.collapsedSize) {
+        collapsedPanelList.push({ ele: ele, size: size });
       } else {
-        nonZeroSizeList.push({ ele: ele, size: size });
+        expandedPanelList.push({ ele: ele, size: size });
       }
       siblingsSizeTotal += size; // fill parent container
     });
@@ -530,14 +585,15 @@ const initHandler = (
      * Set size of all siblings
      * Prevent the last panel left 1px caused by Math.round of the previous panel
      * Set the zero size first, then calculate the non-zero sizes.  */
-    zeroSizeList.forEach((item) => {
-      item.ele.style[dimension] = "0px";
+    collapsedPanelList.forEach((item) => {
+      item.ele.style[dimension] = `${props.collapsedSize}px`;
+      parentSize -= props.collapsedSize;
     });
     const ratio = parentSize / siblingsSizeTotal;
-    for (let i = 0; i < nonZeroSizeList.length; i++) {
-      const item = nonZeroSizeList[i];
+    for (let i = 0; i < expandedPanelList.length; i++) {
+      const item = expandedPanelList[i];
       let size = 0;
-      if (i < nonZeroSizeList.length - 1) {
+      if (i < expandedPanelList.length - 1) {
         size = Math.round(item.size * ratio);
         parentSize -= size;
       } else {
@@ -558,8 +614,8 @@ const initHandler = (
         const nextEle = ele.nextElementSibling as HTMLElement;
         const prevRect = prevEle?.getBoundingClientRect(); // for calc direction
         const nextRect = nextEle?.getBoundingClientRect(); // for calc direction
-        const prevInfo = ele.querySelector(".prev-info") as HTMLElement;
-        const nextInfo = ele.querySelector(".next-info") as HTMLElement;
+        const prevInfo = ele.querySelector(".panel-info.prev") as HTMLElement;
+        const nextInfo = ele.querySelector(".panel-info.next") as HTMLElement;
         prevInfo.textContent = `${Math.round(prevRect[dimension] * 100) / 100}`;
         nextInfo.textContent = `${Math.round(nextRect[dimension] * 100) / 100}`;
       }
@@ -576,7 +632,9 @@ const initHandler = (
       if (isHandler(ele)) continue; //watch panels only
       const size = ele.getBoundingClientRect()[dimension];
       // console.debug("size:", size, ele.id, i);
-      if (size <= 10) {
+      const attrMinSize = ele.getAttribute("data-collapsed-size");
+      const minSize = attrMinSize ? parseInt(attrMinSize) : 10;
+      if (size <= minSize + 10) {
         console.debug("👻 Collapsed panel found:", ele);
         // Set very tiny panel to collapsed
         if (!isHandler(ele)) {
@@ -628,7 +686,18 @@ const initHandler = (
     console.groupEnd();
   };
 
-  const restorePanelSize = () => {
+  const saveAdjacentSize = () => {
+    const prevSize = prevEle.getBoundingClientRect()[dimension];
+    if (prevSize > prevCollapsedSize + 10) {
+      saveSize(prevEle.id, { [dimension]: prevSize }, lsBeforeCollapseKey);
+    }
+    const nextSize = nextEle.getBoundingClientRect()[dimension];
+    if (nextSize > nextCollapsedSize + 10) {
+      saveSize(nextEle.id, { [dimension]: nextSize }, lsBeforeCollapseKey);
+    }
+  };
+
+  const restoreAllPanelSize = () => {
     console.group("🍕 Restore panel size");
     const siblingList = getSiblings();
     for (let ele of siblingList) {
@@ -645,7 +714,7 @@ const initHandler = (
     setCollapseStatusOfSiblings();
     console.groupEnd();
   };
-  restorePanelSize();
+  restoreAllPanelSize();
   // ------------------------------ Store & Restore Panel Size - END
 
   updateInfoOfSiblings();
@@ -661,9 +730,8 @@ onMounted(() => {
 // ------------------------------ drag - END
 </script>
 
-<style lang="scss">
+<style lang="scss" scoped>
 .resize-handler {
-  --actual-size: var(--size); // Collapsed actual size
   flex: none !important;
   z-index: 99;
   box-sizing: border-box;
@@ -716,7 +784,7 @@ onMounted(() => {
    * Handler of LR
    * Directly set width/height will cause 1px expand to 1.5px on windows,
    * which will appear as 2px. To maintain a 1px appearance, use border here.
-   * If the size is an odd number, right/bottom has higher priority. 
+   * If the size is an odd number, right/bottom has higher priority.
    */
   &.LR {
     border-left: calc((var(--size) - 1px) / 2) solid;
@@ -729,14 +797,13 @@ onMounted(() => {
       flex-direction: row; // for prev/next align setting
 
       &::after {
-        width: max(var(--actual-size), var(--hover-size)); // hover area
+        width: max(var(--size), var(--hover-size)); // hover area
       }
     }
   }
 
   // Handler of TB
   &.TB {
-    // height: var(--actual-size);
     border-top: calc((var(--size) - 1px) / 2) solid;
     border-bottom: calc((var(--size) + 1px) / 2) solid;
     cursor: ns-resize;
@@ -747,60 +814,10 @@ onMounted(() => {
       flex-direction: column; // for prev/next align setting
 
       &::after {
-        height: max(var(--actual-size), var(--hover-size)); // hover area
+        height: max(var(--size), var(--hover-size)); // hover area
       }
     }
   }
-
-  // ------------------------------ Collapsed handler - START
-  &.prev-panel-collapsed,
-  &.next-panel-collapsed {
-    // Collapsed actual size (avoid too thin, easily identifiable)
-    --actual-size: max(var(--collapsed-min-size), var(--size));
-    background: var(--collapsed-bg);
-    border: unset; //unset the bg
-    .hover-indicator {
-      margin: calc(var(--indicator-size) / -2);
-    }
-    &.LR {
-      width: var(--actual-size);
-    }
-    &.TB {
-      height: var(--actual-size);
-    }
-  }
-  // Both adjacent elements are collapsed
-  &.prev-panel-collapsed.next-panel-collapsed {
-    --actual-size: calc(max(var(--collapsed-min-size), var(--size)) + 1px);
-    // If both adjacent elements are collapsed, prevent drag
-    pointer-events: none;
-    user-select: none;
-  }
-  &.LR {
-    &.prev-panel-collapsed {
-      border-right: 1px solid;
-    }
-    &.next-panel-collapsed {
-      border-left: 1px solid;
-    }
-  }
-  &.TB {
-    &.prev-panel-collapsed {
-      border-bottom: 1px solid;
-    }
-    &.next-panel-collapsed {
-      border-top: 1px solid;
-    }
-  }
-
-  // Change the indicator position while collapsed
-  &.prev-panel-collapsed {
-    justify-content: flex-end;
-  }
-  &.next-panel-collapsed {
-    justify-content: flex-start;
-  }
-  // ------------------------------ Collapsed handler - END
 
   // ------------------------------ Collapse Button - START
   // ::before = background
@@ -823,6 +840,7 @@ onMounted(() => {
     transform: scale(0); //product
     // border: 1px solid red; //debug
     // opacity: 0.5; //debug
+    // transform: scale(1); //debug
     transition: opacity 0.5s, transform var(--fadeout) 0.5s;
 
     // before = background, after = arrow
@@ -872,14 +890,14 @@ onMounted(() => {
       border-bottom: var(--arrow) solid transparent;
     }
     &.prev {
-      right: var(--actual-size);
+      right: calc(var(--size) / 2);
       transform-origin: right;
       &::after {
         border-right: var(--arrow) solid;
       }
     }
     &.next {
-      left: var(--actual-size);
+      left: calc(var(--size) / 2);
       transform-origin: left;
       &::after {
         border-left: var(--arrow) solid;
@@ -897,14 +915,14 @@ onMounted(() => {
       border-right: var(--arrow) solid transparent;
     }
     &.prev {
-      bottom: var(--actual-size);
+      bottom: calc(var(--size) / 2);
       transform-origin: bottom;
       &::after {
         border-bottom: var(--arrow) solid;
       }
     }
     &.next {
-      top: var(--actual-size);
+      top: calc(var(--size) / 2);
       transform-origin: top;
       &::after {
         border-top: var(--arrow) solid;
@@ -921,14 +939,15 @@ onMounted(() => {
   }
 
   // Maintain a small size while collapsed for easy activation.
+  &.prev-panel-collapsed .collapse-btn.next,
+  &.next-panel-collapsed .collapse-btn.prev {
+    transform: scale(0.5);
+    display: flex !important; // non-collapsible btn, should allow for expand
+  }
+
+  // If the handler is already collapsed, there's no need for a delay
   &.prev-panel-collapsed,
   &.next-panel-collapsed {
-    .collapse-btn {
-      transform: scale(0.5);
-      display: flex !important; // non-collapsible btn, should allow for expand
-    }
-
-    // If the handler is already collapsed, there's no need for a delay
     &:hover .collapse-btn {
       transition: opacity 0.2s, transform 0.2s var(--fadein);
     }
@@ -936,8 +955,7 @@ onMounted(() => {
   // ------------------------------ Collapse Button - END
 
   // ------------------------------ Info box - START
-  .prev-info,
-  .next-info {
+  .panel-info {
     background: #3339;
     margin: var(--gap);
     padding: 0 var(--gap);
@@ -955,37 +973,37 @@ onMounted(() => {
     transition: opacity 0.2s, transform 0.2s var(--fadeout);
     position: absolute;
   }
-  &.LR {
-    .prev-info {
-      align-self: flex-end;
-      right: var(--actual-size);
+  &.LR .panel-info {
+    align-self: flex-end;
+    &.prev {
+      right: calc(var(--size) / 2);
     }
-    .next-info {
-      align-self: flex-end;
-      left: var(--actual-size);
+    &.next {
+      left: calc(var(--size) / 2);
     }
   }
-  &.TB {
-    .prev-info {
-      align-self: flex-start;
-      bottom: var(--actual-size);
+
+  &.TB .panel-info {
+    align-self: flex-start;
+    &.prev {
+      bottom: calc(var(--size) / 2);
     }
-    .next-info {
-      align-self: flex-start;
-      top: var(--actual-size);
+    &.next {
+      top: calc(var(--size) / 2);
     }
   }
   &.dragging,
   &:hover {
-    .prev-info,
-    .next-info {
+    .panel-info {
       opacity: 0.75;
       transform: scale(1);
     }
   }
   // ------------------------------ Info box - END
 }
+</style>
 
+<style lang="scss">
 // Collapse panel
 // Prevent size change while window size expand
 // freeze class will be added by js
@@ -1011,9 +1029,33 @@ onMounted(() => {
   }
 }
 
-// The hanlder of sub-panel, which parent panel is collapsed.
-.panel-collapsed .resize-handler {
-  display: none;
+.panel-collapsed-view {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  z-index: -1;
+  user-select: none;
+}
+.panel-collapsed {
+  position: relative;
+
+  // ------------------------------ Collapsed handler - START
+  .panel-collapsed-view {
+    background: red;
+    z-index: 99;
+    user-select: normal;
+    opacity: 1;
+    transition: opacity 0.5s;
+  }
+  // ------------------------------ Collapsed handler - END
+
+  // The hanlder of sub-panel, which parent panel is collapsed.
+  .resize-handler {
+    display: none;
+  }
 }
 
 // While dragging, prevent text be selected. Added to body.

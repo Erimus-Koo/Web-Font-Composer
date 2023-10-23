@@ -3,28 +3,6 @@
     <Sidebar id="sidebar-wrapper" />
     <resizeHandler />
     <Preview id="preview-wrapper" />
-    <resizeHandler />
-    <div
-      id="test-panel"
-      style="
-        width: 200px;
-        border-left: 0px solid;
-        display: flex;
-        flex-flow: column nowrap;
-        height: 100%;
-      "
-    >
-      <div id="top-panel" style="height: 100%" />
-      <resizeHandler />
-      <div id="center-panel" style="height: 100%" />
-      <resizeHandler />
-      <div
-        id="bottom-panel"
-        style="height: 100%; background: lightgreen; outline: 0px solid"
-      />
-    </div>
-    <resizeHandler />
-    <div id="last" style="background: rosybrown; border-left: 0px solid" />
   </div>
 </template>
 
