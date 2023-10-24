@@ -8,16 +8,13 @@
     class="resize-handler"
     v-bind="$attrs"
     :style="
-      '--size:' +
-      size +
-      'px;--hover-size:' +
-      hoverSize +
-      'px;--color:' +
-      color +
-      ';--indicator-size:' +
-      indicatorSize +
-      'px;--indicator-color:' +
-      indicatorColor
+      `--size:${size}px;` +
+      `--border-prev-width:${Math.floor(size / 2)}px;` +
+      `--border-next-width:${Math.ceil(size / 2)}px;` +
+      `--hover-size:${hoverSize}px;` +
+      `--color:${color};` +
+      `--indicator-size:${indicatorSize}px;` +
+      `--indicator-color:${indicatorColor};`
     "
     ref="refHandler"
   >
@@ -124,7 +121,7 @@ const saveSize = (
 };
 // ------------------------------ store size - END
 
-// ------------------------------ drag - START
+// ------------------------------ init - START
 const initHandler = (
   handler: HTMLElement // element
 ): void => {
@@ -720,14 +717,13 @@ const initHandler = (
   updateInfoOfSiblings();
   console.groupEnd(); // init end
 };
+// ------------------------------ init - END
 
 onMounted(() => {
   console.debug("🎯🎯🎯 Mounted", refHandler.value);
-
   // Add event/listener to handler
   initHandler(refHandler.value);
 });
-// ------------------------------ drag - END
 </script>
 
 <style lang="scss" scoped>
@@ -787,8 +783,8 @@ onMounted(() => {
    * If the size is an odd number, right/bottom has higher priority.
    */
   &.LR {
-    border-left: calc((var(--size) - 1px) / 2) solid;
-    border-right: calc((var(--size) + 1px) / 2) solid;
+    border-left: var(--border-prev-width) solid;
+    border-right: var(--border-next-width) solid;
     cursor: ew-resize;
     flex-direction: row; // for prev/next align setting
 
@@ -804,8 +800,8 @@ onMounted(() => {
 
   // Handler of TB
   &.TB {
-    border-top: calc((var(--size) - 1px) / 2) solid;
-    border-bottom: calc((var(--size) + 1px) / 2) solid;
+    border-top: var(--border-prev-width) solid;
+    border-bottom: var(--border-next-width) solid;
     cursor: ns-resize;
     flex-direction: column; // for prev/next align setting
 
@@ -1004,6 +1000,32 @@ onMounted(() => {
 </style>
 
 <style lang="scss">
+// ------------------------------ Body
+// While dragging, prevent text be selected. Added to body.
+.body-on-dragging {
+  &,
+  & * {
+    user-select: none;
+  }
+  &.LR {
+    cursor: ew-resize;
+  }
+  &.TB {
+    cursor: ns-resize;
+  }
+}
+
+// ------------------------------ Parent
+.handler-wrapper {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  & > * {
+    flex-grow: 1; // The children will expand and fill the wrapper
+  }
+}
+
+// ------------------------------ Panel
 // Collapse panel
 // Prevent size change while window size expand
 // freeze class will be added by js
@@ -1014,14 +1036,15 @@ onMounted(() => {
   min-height: unset !important;
 }
 
-// The handlar after the collapsed element
+// Hide collapse btn of the collapsed panel
+// The handlar next to the collapsed element
 .panel-collapsed + .resize-handler,
 .resize-handler.prev-panel-collapsed {
   .collapse-btn.prev {
     display: none;
   }
 }
-// The handler before the collapsed element
+// The handler prev to the collapsed element
 .resize-handler:has(+ .panel-collapsed),
 .resize-handler.next-panel-collapsed {
   .collapse-btn.next {
@@ -1029,16 +1052,6 @@ onMounted(() => {
   }
 }
 
-.panel-collapsed-view {
-  width: 100%;
-  height: 100%;
-  position: absolute;
-  top: 0;
-  left: 0;
-  opacity: 0;
-  z-index: -1;
-  user-select: none;
-}
 .panel-collapsed {
   position: relative;
 
@@ -1058,28 +1071,16 @@ onMounted(() => {
   }
 }
 
-// While dragging, prevent text be selected. Added to body.
-.body-on-dragging {
-  &,
-  & * {
-    user-select: none;
-  }
-  &.LR {
-    cursor: ew-resize;
-  }
-  &.TB {
-    cursor: ns-resize;
-  }
-}
-
-// Parent
-.handler-wrapper {
-  display: flex;
+// Display while the panel has collapsed
+.panel-collapsed-view {
   width: 100%;
   height: 100%;
-  & > * {
-    flex-grow: 1;
-  }
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  z-index: -1;
+  user-select: none;
 }
 
 // Apply animation to the panel while collapsing and expanding.

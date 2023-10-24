@@ -6,7 +6,7 @@
   </div>
 </template>
 
-<script setup lang="ts">
+<script setup>
 import { ref, onMounted, onUnmounted } from "vue";
 import { useStore } from "@/store";
 const store = useStore();
