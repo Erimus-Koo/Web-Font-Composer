@@ -1,7 +1,43 @@
-<!-- 
+<!--
+## 1. Resize Handler
 - This is a resize handler.
 - Direction could be LR(left/right) or TB(top/bottom)
 - The siblings are named prev(top/left) and next(bottom/right) 
+- The sizes of panels will be store in local storage, name `panelSize`.
+
+## 2. Out of this component
+In order to make this component compatible with more older projects, it will 
+automatically add a small amount of styles and attributes to the parent element 
+and sibling elements.
+- The style section begins with `<style lang="scss">`.
+- Most of the JavaScript code is located in the initHandler and dragStart.
+
+
+### 2.1 Body
+- While dragging the handler, there is a style that prevents mouse events.
+
+### 2.2 Parent Element
+- The parent element should display as flex, and this component will set style
+  of the parent element. 
+
+### 2.3 Panel ✨
+- Sibling nodes will be automatically treated as resizable panels.
+- The panel must has an unique #ID to store its size 👀.
+
+#### 2.3.1 Panel props
+- data-min-size: 👀 number[int/str], pixel of the panel recommend min size.
+- data-collpased-size: 👀 number[int/str], pixel of the panel collapsed size.
+  Default is `props.collapsedSize`
+- data-non-collapsible: bool, panel can not be collapsed.
+  This attribute only works if the panel has a minimum size.
+
+#### 2.3.2 Panel Collapsed View 👀
+- The element is only displayed when the panel is collapsed.
+- Use the class name `.panel-collapsed-view`.
+- The default panel color is white and its size is `porps.collapsedSize`.
+- You can add a customized div with `.panel-collapsed-view` to display 
+  additional content, such as the names of collapsed tabs.
+
  -->
 <template>
   <div
@@ -21,14 +57,8 @@
     <!-- display while mouse hover & expand hover area -->
     <div class="hover-indicator">
       <!-- the collapse buttons -->
-      <div
-        class="collapse-btn prev"
-        :class="{ 'non-collapsible': !prevCollapsible }"
-      />
-      <div
-        class="collapse-btn next"
-        :class="{ 'non-collapsible': !nextCollapsible }"
-      />
+      <div class="collapse-btn prev" />
+      <div class="collapse-btn next" />
 
       <!-- info -->
       <div class="panel-info prev"></div>
@@ -51,14 +81,11 @@ const props = withDefaults(
     indicatorColor?: string; // The color of indicator
 
     // collapsed handler
-    collapseThreshold?: number; // Panel collapse when smaller than this size
+    collapseThreshold?: number; // Threshold for automatic panel snapping
 
     // adjacent elements
     collapsedSize?: number; // While collapsed, set a min size to indentify
     collapsedBg?: string; // BG of collapsed hander, border is handler color
-
-    prevCollapsible?: boolean;
-    nextCollapsible?: boolean;
 
     /** Resize Adjacent Element Only
      * The main difference is about the size limit panel
@@ -68,14 +95,14 @@ const props = withDefaults(
     freezeOtherPanel?: boolean;
   }>(),
   {
-    size: 10,
+    size: 1,
     hoverSize: 10,
     color: "#333",
     indicatorSize: 2,
     indicatorColor: "#06f",
-    collapseThreshold: 100,
-    collapsedSize: 10,
-    collapsedBg: "#f00",
+    collapseThreshold: 50,
+    collapsedSize: 5,
+    collapsedBg: "#eee",
     prevCollapsible: true,
     nextCollapsible: true,
     freezeOtherPanel: false,
@@ -90,15 +117,14 @@ let nextCollapsedSize: number;
 let prevMinSize: number;
 let nextMinSize: number;
 
-// ------------------------------ store size - START
+// ------------------------------ Store size - START
 const lsKey = "panelSize"; // local storage key of panel size
-const lsBeforeCollapseKey = "beforeCollapse"; // store key of the size before collapse
+const lsBeforeCollapseKey = "beforeCollapse"; // key of the size before collapse
 
-type SizeObj = {
-  width?: number;
-  height?: number;
-};
+type SizeObj = { width?: number; height?: number };
 
+// If panelId is provided, return the size of that specific panel.
+// Otherwise, return the entire dictionary of stored sizes.
 const loadSize = (
   panelId: string | null = null, //panel id
   key: string = lsKey //store name
@@ -119,9 +145,9 @@ const saveSize = (
   storedObj[panelId] = sizeObj;
   localStorage.setItem(key, JSON.stringify(storedObj));
 };
-// ------------------------------ store size - END
+// ------------------------------ Store size - END
 
-// ------------------------------ init - START
+// ------------------------------ Init - START
 const initHandler = (
   handler: HTMLElement // element
 ): void => {
@@ -131,36 +157,36 @@ const initHandler = (
   let parentEle = handler.parentElement;
   parentEle?.classList.add("handler-wrapper");
 
-  // Define adjacents
+  // Define adjacent elements
   let prevEle = handler.previousElementSibling as HTMLElement;
   let nextEle = handler.nextElementSibling as HTMLElement;
-  let prevRect = prevEle?.getBoundingClientRect(); // for calc direction
-  let nextRect = nextEle?.getBoundingClientRect(); // for calc direction
-  console.debug("[0]Prev Node:", prevEle, prevRect);
-  console.debug("[0]Next Node:", nextEle, nextRect);
-  if (!(prevEle && nextEle)) return; // Do not resize without siblings
+  let prevRect = prevEle?.getBoundingClientRect(); //for calc direction
+  let nextRect = nextEle?.getBoundingClientRect(); //for calc direction
+  console.debug("[init] Prev Ele:", prevEle, prevRect);
+  console.debug("[init] Next Ele:", nextEle, nextRect);
+  if (!(prevEle && nextEle)) return; //Do not resize without siblings
 
   // Check if element is handler
   const isHandler = (ele: HTMLElement): boolean =>
     ele && ele.classList.contains("resize-handler"); //ele might be null
 
-  // Get handler of adjacents
-  let prevPrev = prevEle.previousElementSibling as HTMLElement;
-  let prevHdl = isHandler(prevPrev) ? prevPrev : undefined;
-  let nextNext = nextEle.nextElementSibling as HTMLElement;
-  let nextHdl = isHandler(nextNext) ? nextNext : undefined;
-  console.debug("[0]Prev Handler:", prevHdl);
-  console.debug("[0]Next Handler:", nextHdl);
+  // Get handler of adjacent elements
+  const _prevPrev = prevEle.previousElementSibling as HTMLElement;
+  let prevHdl = isHandler(_prevPrev) ? _prevPrev : undefined;
+  const _nextNext = nextEle.nextElementSibling as HTMLElement;
+  let nextHdl = isHandler(_nextNext) ? _nextNext : undefined;
+  console.debug("[init]Prev Handler:", prevHdl);
+  console.debug("[init]Next Handler:", nextHdl);
 
-  // init info box
-  let prevInfo = handler.querySelector(".panel-info.prev") as HTMLElement;
-  let nextInfo = handler.querySelector(".panel-info.next") as HTMLElement;
+  // Init info box
+  const prevInfo = handler.querySelector(".panel-info.prev") as HTMLElement;
+  const nextInfo = handler.querySelector(".panel-info.next") as HTMLElement;
 
   // Define vaiables and common functions
   let start = 0; // Previous node top/left
   let end = window.innerWidth; // Next node bottom/right
 
-  // Determine the handler direction by adjacents
+  // Determine the handler direction by adjacent elements
   if (
     Math.abs(prevRect.y - nextRect.y) < 1 &&
     Math.abs(prevRect.height - nextRect.height) < 1
@@ -171,14 +197,17 @@ const initHandler = (
     Math.abs(prevRect.width - nextRect.width) < 1
   ) {
     direction = "TB";
+  } else {
+    console.error("Can not determimne the direction of handler", handler);
+    return;
   }
   handler.classList.add(direction);
   dimension = direction === "LR" ? "width" : "height";
-  console.debug("handlerDirection:", direction, dimension, prevRect, nextRect);
+  console.debug("Direction:", direction, dimension, prevRect, nextRect);
 
-  // Check neighbors' id
+  // Check the ID of adjacent elements, no ID panel's size won't be store.
   if (!prevEle.id || !nextEle.id) {
-    console.warn("The neighbors of handler must have ID", prevEle, nextEle);
+    console.warn("The adjacent elements must have ID", prevEle, nextEle);
   }
 
   // ------------------------------ Get all siblings - START
@@ -188,7 +217,9 @@ const initHandler = (
 
     let element = handler.parentElement?.firstElementChild as HTMLElement;
     do {
-      siblingList.push(element);
+      if (!element.classList.contains("panel-collapsed-view")) {
+        siblingList.push(element);
+      }
     } while ((element = element?.nextElementSibling as HTMLElement));
 
     // console.debug(`👬🏻 siblingList:`, siblingList);
@@ -196,22 +227,37 @@ const initHandler = (
   };
   // ------------------------------ Get all siblings - END
 
-  // ------------------------------ Create collapsed panel's view - START
+  // ------------------------------ Create view of collapsed panels - START
   // panel-collapsed-view is a special div only display when panel is collapsed
   getSiblings().forEach((ele) => {
-    if (isHandler(ele)) return; //skip handler
-    if (ele.querySelector(".panel-collapsed-view")) return; // skip view existed
-    // Create div
-    let collapsedPanelView = document.createElement("div");
-    collapsedPanelView.classList.add("panel-collapsed-view");
-    ele.appendChild(collapsedPanelView);
+    // Create view div
+    if (
+      !isHandler(ele) && //skip handler
+      !ele.querySelector(".panel-collapsed-view") && //view existed
+      !ele.classList.contains("panel-collapsed-view") //self is view
+    ) {
+      let collapsedPanelView = document.createElement("div");
+      collapsedPanelView.classList.add("panel-collapsed-view");
+      ele.appendChild(collapsedPanelView);
+    }
   });
-  // ------------------------------ Create collapsed panel's view - END
+  // ------------------------------ Create view of collapsed panels - END
 
   // ------------------------------ Update size of adjacent elements - START
+  const getCS = (ele: HTMLElement): number =>
+    parseInt(
+      ele.getAttribute("data-collapsed-size") || `${props.collapsedSize}`
+    );
+  const getCollapsible = (ele: HTMLElement): boolean => {
+    const _NON = ele.getAttribute("data-non-collapsible");
+    return !(_NON === "" || _NON?.toLowerCase() === "true");
+  };
   const updatePanelRectSize = () => {
+    // Update rect
     prevRect = prevEle.getBoundingClientRect();
     nextRect = nextEle.getBoundingClientRect();
+
+    // Update start/end
     if (direction === "LR") {
       start = prevRect.x;
       end = nextRect.x + nextRect.width;
@@ -220,25 +266,33 @@ const initHandler = (
       end = nextRect.y + nextRect.height;
     }
 
-    const prevPropCollapsedSize = prevEle.getAttribute("data-collapsed-size");
-    prevCollapsedSize = prevPropCollapsedSize
-      ? parseInt(prevPropCollapsedSize)
-      : 0;
-    const nextPropCollapsedSize = nextEle.getAttribute("data-collapsed-size");
-    nextCollapsedSize = nextPropCollapsedSize
-      ? parseInt(nextPropCollapsedSize)
-      : 0;
+    // Update panel collapsed size
+    // The size might be set in em units and needs to be updated regularly.
+    // ※ If the data-collapsed-size does not exist, it will be set at init.
+    for (let ele of [prevEle, nextEle]) {
+      const _MS = ele.getAttribute("data-min-size");
+      if (ele === prevEle) {
+        prevCollapsedSize = getCS(ele);
+        prevMinSize = _MS ? parseInt(_MS) : prevCollapsedSize;
+        if (!getCollapsible(ele))
+          handler
+            .querySelector(".collapse-btn.prev")
+            ?.classList.add("non-collapsible");
+      } else {
+        nextCollapsedSize = getCS(ele);
+        nextMinSize = _MS ? parseInt(_MS) : nextCollapsedSize;
+        if (!getCollapsible(ele))
+          handler
+            .querySelector(".collapse-btn.next")
+            ?.classList.add("non-collapsible");
+      }
+    }
     console.debug(
-      "prevCollapsedSize:",
-      prevCollapsedSize,
-      "nextCollapsedSize:",
-      nextCollapsedSize
+      `CollapsedSize: prev=${prevCollapsedSize} next=${nextCollapsedSize}` +
+        `MinSize: prev=${prevMinSize} next=${nextMinSize}`
     );
 
-    const prevPropMinSize = prevEle.getAttribute("data-min-size");
-    prevMinSize = prevPropMinSize ? parseInt(prevPropMinSize) : 0;
-    const nextPropMinSize = nextEle.getAttribute("data-min-size");
-    nextMinSize = nextPropMinSize ? parseInt(nextPropMinSize) : 0;
+    // Write min size to panel
     // const attribute = dimension === "width" ? "minWidth" : "minHeight";
     // prevEle.style[attribute] = `${prevMinSize}px`;
     // nextEle.style[attribute] = `${nextMinSize}px`;
@@ -247,22 +301,38 @@ const initHandler = (
   // ------------------------------ Update size of adjacent elements - END
 
   // ------------------------------ Update info content - START
-  const updateInfo = () => {
-    prevRect = prevEle.getBoundingClientRect();
-    nextRect = nextEle.getBoundingClientRect();
+  const updateInfo = (ele = handler) => {
+    const prevEle = ele.previousElementSibling as HTMLElement;
+    const nextEle = ele.nextElementSibling as HTMLElement;
+    const prevRect = prevEle?.getBoundingClientRect();
+    const nextRect = nextEle?.getBoundingClientRect();
+    const prevInfo = ele.querySelector(".panel-info.prev") as HTMLElement;
+    const nextInfo = ele.querySelector(".panel-info.next") as HTMLElement;
     prevInfo.textContent = `${Math.round(prevRect[dimension] * 100) / 100}`;
     nextInfo.textContent = `${Math.round(nextRect[dimension] * 100) / 100}`;
   };
   // ------------------------------ Update info content - END
 
+  // ------------------------------ Update all siblings' info - START
+  const updateInfoOfSiblings = () => {
+    for (let ele of getSiblings()) {
+      if (isHandler(ele)) updateInfo(ele);
+    }
+  };
+  // ------------------------------ Update all siblings' info - END
+
   // ------------------------------ Collapse & Expand Panel - START
-  const clearCollapsePropertiesOfAdjacent = () => {
-    prevHdl?.classList.remove("next-panel-collapsed");
-    prevEle.classList.remove("panel-collapsed");
-    handler.classList.remove("prev-panel-collapsed");
-    handler.classList.remove("next-panel-collapsed");
-    nextEle.classList.remove("panel-collapsed");
-    nextHdl?.classList.remove("prev-panel-collapsed");
+  const changeCollapsePropertiesOfPanel = (
+    panelElement: HTMLElement,
+    func: "add" | "remove"
+  ) => {
+    panelElement.classList[func]("panel-collapsed");
+    const prevHandler = panelElement.previousElementSibling as HTMLElement;
+    if (isHandler(prevHandler))
+      prevHandler.classList[func]("next-panel-collapsed");
+    const nextHandler = panelElement.nextElementSibling as HTMLElement;
+    if (isHandler(nextHandler))
+      nextHandler.classList[func]("prev-panel-collapsed");
   };
 
   /**
@@ -290,93 +360,64 @@ const initHandler = (
   };
 
   const collapsePanel = (collapseDirection: "prev" | "next") => {
+    updatePanelRectSize();
     const targetEle = collapseDirection === "prev" ? prevEle : nextEle;
     const anotherEle = collapseDirection === "next" ? prevEle : nextEle;
     const targetHdl = collapseDirection === "prev" ? prevHdl : nextHdl;
-    const targetMinSize =
-      collapseDirection === "prev" ? prevCollapsedSize : nextCollapsedSize;
-    let hdlChange = 0;
-    if (!targetHdl) {
-      hdlChange = 0; // on window edge, no handler
-    } else if (
-      targetHdl?.classList.contains(`${collapseDirection}-panel-collapsed`)
-    ) {
-      hdlChange = props.size; // Target handler already collapsed
-    } else {
-      hdlChange = props.collapsedSize; // Target handler is not collapsed
-    }
+
     const oppositeDirection = collapseDirection === "prev" ? "next" : "prev";
-    const fullSize = end - start - props.collapsedSize - hdlChange;
-    const targetSize = targetMinSize;
+    const fullSize = end - start - props.size;
+    const targetSize =
+      collapseDirection === "prev" ? prevCollapsedSize : nextCollapsedSize;
     const anotherSize = fullSize - targetSize;
     targetEle.style[dimension] = `${targetSize}px`;
     anotherEle.style[dimension] = `${anotherSize}px`;
     console.debug(
-      `hdlChange:${hdlChange} ` +
-        `start:${start} end:${end} end-start:${end - start} ` +
+      `start:${start} end:${end} end-start:${end - start} ` +
         `full:${fullSize} target:${targetSize} another:${anotherSize}`
     );
 
-    // Change styles (if panel has min-size, panel won't be collapsed)
-    handler.classList.add(`${collapseDirection}-panel-collapsed`);
-    targetEle.classList.add("panel-collapsed");
-    targetHdl?.classList.add(`${oppositeDirection}-panel-collapsed`);
+    // Change styles
+    changeCollapsePropertiesOfPanel(targetEle, "add");
 
     addPanelTransition("drag-transition", 200);
-
-    return {
-      prevSize: collapseDirection === "prev" ? targetSize : anotherSize,
-      nextSize: collapseDirection === "next" ? targetSize : anotherSize,
-    };
   };
 
-  const expandPanel = (collapseDirection: "prev" | "next"): void => {
-    // Load the size of the panel before collapsed
-    const targetEle = collapseDirection === "prev" ? nextEle : prevEle;
-    const anotherEle = collapseDirection === "next" ? nextEle : prevEle;
-    const targetHdl = collapseDirection === "prev" ? nextHdl : prevHdl;
-    const oppositeDirection = collapseDirection === "prev" ? "next" : "prev";
-    let hdlChange = 0;
-    if (!targetHdl) {
-      hdlChange = 0; // on window edge, no handler
-    } else if (
-      targetHdl?.classList.contains(`${oppositeDirection}-panel-collapsed`)
-    ) {
-      hdlChange = props.size; // Target handler already collapsed
-    } else {
-      hdlChange = props.collapsedSize; // Target handler is not collapsed
-    }
-    const fullSize = end - start - props.size + hdlChange; // handler changes
+  const expandPanel = (expandDirection: "prev" | "next"): void => {
+    // updatePanelRectSize();
+    // targetEle = Which panel will be expanded
+    const targetEle = expandDirection === "prev" ? nextEle : prevEle;
+    const anotherEle = expandDirection === "next" ? nextEle : prevEle;
+    const fullSize = end - start - props.size; // handler changes
 
     // Read stored size
     const storedSize = loadSize(targetEle.id, lsBeforeCollapseKey)[dimension];
-    const minSize = Math.min(fullSize / 2, props.collapseThreshold);
+    const minSize = Math.max(fullSize / 2, props.collapseThreshold);
+    console.debug(
+      `🍉 storedSize:${storedSize} ` +
+        `start:${start} end:${end} end-start:${end - start} ` +
+        `full:${fullSize} storedSize:${storedSize} minSize:${minSize}`
+    );
     const targetSize = Math.round(
       !storedSize || // no stored size
         (storedSize && storedSize >= fullSize - props.collapseThreshold) // invalid
         ? minSize // set as min size
-        : Math.round(Math.max(storedSize, minSize))
+        : storedSize
     );
     targetEle.style[dimension] = targetSize + "px";
     anotherEle.style[dimension] = fullSize - targetSize + "px";
-    console.debug(
-      `storedSize:${storedSize} hdlChange:${hdlChange} ` +
-        `start:${start} end:${end} end-start:${end - start} ` +
-        `full:${fullSize} target:${targetSize} another:${fullSize - targetSize}`
-    );
+    console.debug(`target:${targetSize} another:${fullSize - targetSize}`);
+
+    // Remove collapsed classes
+    changeCollapsePropertiesOfPanel(targetEle, "remove");
 
     addPanelTransition("drag-transition", 200);
-
-    // remove collapsed classes
-    clearCollapsePropertiesOfAdjacent();
   };
   // ------------------------------ Collapse & Expand Panel - END
 
   // -------------------- Drag start - START
   const dragStart = () => {
-    console.debug("🚩 Drag Start");
-
-    const halfSize = props.size / 2;
+    console.debug("🔫 Drag Start");
 
     // Prevent text be selected while mouse move
     document.body.classList.add("body-on-dragging");
@@ -385,73 +426,191 @@ const initHandler = (
 
     setActualSizeOfSiblings();
 
-    if (props.freezeOtherPanel) {
-      freezeNonAdjacentElements("freeze");
-    }
+    // freezeNonAdjacentElements("freeze");
 
     // Get start/end of siblings
     updatePanelRectSize();
-    // console.debug("[1]Prev Node:", prevEle, prevRect);
-    // console.debug("[1]Next Node:", nextEle, nextRect);
     console.debug("direction:", direction, [start, end]);
 
-    // update info box
-    updateInfo();
-
     // Store panel size (if dragged to collapsed, store it for expanding)
-    saveAdjacentSize();
+    saveAllPanelsSize(lsBeforeCollapseKey);
 
-    // Calculate the valid range while dragging
-    const clamp = (v: number): number =>
-      Math.min(Math.max(v, start + prevMinSize), end - nextMinSize - 1);
+    // ------------------------------ Prepare for move - START
+    let distance: number = 0;
+    type SizeListObj = Array<{
+      ele: HTMLElement;
+      type: "handler" | "number";
+      size: number; //Actual size (Panel or Handler)
+      minSize: number; //Panel min size
+      collapsedSize: number; //Panel collapsed size
+      collapsible: boolean;
+    }>;
+    const siblingSizeList = getSiblings().map((ele) => ({
+      ele: ele,
+      type: isHandler(ele) ? "handler" : "panel",
+      size: ele.getBoundingClientRect()[dimension],
+      minSize: parseInt(ele.getAttribute("data-min-size") || `${getCS(ele)}`),
+      collapsedSize: getCS(ele),
+      collapsible: getCollapsible(ele),
+    }));
+    const thisIndex = getSiblings().indexOf(handler);
+    const prevSiblingSizeList = siblingSizeList.slice(0, thisIndex).reverse();
+    const nextSiblingSizeList = siblingSizeList.slice(thisIndex + 1);
+    // If end-start<prevMin+nextMin,
+    // or the start state size less than min size, ignore min size.
+    const _prevEle = prevSiblingSizeList[0];
+    const _nextEle = nextSiblingSizeList[0];
+    const totalSizeLtMinSize =
+      _prevEle.size + _nextEle.size < _prevEle.minSize + _nextEle.minSize;
+    const prevSizeLtMinSize = _prevEle.size < _prevEle.minSize;
+    const nextSizeLtMinSize = _nextEle.size < _nextEle.minSize;
+    if ((prevSizeLtMinSize || totalSizeLtMinSize) && _prevEle.collapsible) {
+      _prevEle.minSize = _prevEle.collapsedSize;
+    }
+    if ((nextSizeLtMinSize || totalSizeLtMinSize) && _nextEle.collapsible) {
+      _nextEle.minSize = _nextEle.collapsedSize;
+    }
+
+    const dragStartPoint =
+      handler.getBoundingClientRect()[direction === "LR" ? "x" : "y"] +
+      props.size / 2;
+    console.debug(
+      `Drag start point=${dragStartPoint} | Index=${thisIndex} | ` +
+        `\nSibling Size List:`,
+      prevSiblingSizeList,
+      nextSiblingSizeList
+    );
+
+    const calcPanelsSize = (
+      to: "prev" | "next",
+      distance: number //Handler move distance
+    ) => {
+      /** Calculate the new size of siblings and set the size
+       * Read the draw.io graph in doc folder for more details
+       */
+      console.group("Calc Panel Size:", to, distance);
+
+      let _siblingSizeList: SizeListObj = (
+        to === "prev" ? prevSiblingSizeList : nextSiblingSizeList
+      ) as SizeListObj;
+
+      // Calculate panel size
+      let result: { ele: HTMLElement; oldSize: number; newSize: number }[] = [];
+      let _start = distance; //Offset at start
+      let _end = 0; //Total end of before
+      let virtualEnd = distance; //Total end of after
+      for (let i = 0; i < _siblingSizeList.length; i++) {
+        const item = _siblingSizeList[i];
+        const size = item.size;
+        const ms = item.minSize;
+        const cs = item.collapsedSize;
+        let newSize = 0; //New size of current panel
+        let stopPropagation = true;
+        _end += size;
+        console.debug(
+          `✨[${i}] ${item.type} ${item.ele.id} start=${_start} end=${_end} ` +
+            `min=${ms} collapse=${cs}`
+        );
+
+        if (item.type === "handler") {
+          console.debug(`🔵 Handler ${item.ele.id}`);
+          newSize = size;
+          stopPropagation = false;
+        } else if (_start <= _end - ms) {
+          // Does not reach the minSize
+          newSize = _end - _start;
+          console.debug(`🟢 Free ${item.ele.id}`);
+        } else if (
+          _start <= _end - cs - props.collapseThreshold &&
+          item.collapsible
+        ) {
+          // Less than min size, but doesn't collapse, keep the min size
+          newSize = ms;
+          console.debug(`🟡 Min ${item.ele.id}`);
+        } else if (_start <= _end - cs && item.collapsible) {
+          // Great than collapse threshold, panel collapse
+          newSize = cs;
+          console.debug(`🟠 Collapse ${item.ele.id}`);
+        } else if (item.collapsible) {
+          // Push next panel
+          newSize = cs;
+          console.debug(`🔴 Over ${item.ele.id} next_start=${_start} `);
+          stopPropagation = false;
+        } else {
+          newSize = ms;
+          console.debug(
+            `🔴 Over(non-collapsible) ${item.ele.id} next_start=${_start} `
+          );
+          stopPropagation = false;
+        }
+        result.push({ ele: item.ele, oldSize: size, newSize: newSize });
+        _start += newSize;
+        virtualEnd += newSize;
+        console.debug(
+          `end=${_end} virtualEnd=${virtualEnd} offset=${_end - virtualEnd} ` +
+            `oldSize=${size} newSize=${newSize} stop=${stopPropagation}`
+        );
+
+        changeCollapsePropertiesOfPanel(
+          item.ele,
+          newSize === cs ? "add" : "remove"
+        );
+
+        if (stopPropagation) break;
+      }
+      let offset = _end - virtualEnd;
+      console.debug(
+        `🚩to:${to} distance:${distance} offset:${offset}\n` + `result:`,
+        result
+      );
+      console.groupEnd();
+
+      return { sizeList: result, offset: offset };
+    };
+    // ------------------------------ Prepare for move - END
 
     // -------------------- Drag move - START
     const dragMove = (e: MouseEvent | TouchEvent) => {
       // Calculate siblings' size
-      console.debug("e.type:", e.type, e);
+      // console.debug("e.type:", e.type, e);
       const src: MouseEvent | Touch =
         e.type === "mousemove"
           ? (e as MouseEvent)
           : (e as TouchEvent).touches[0];
       const current = direction === "LR" ? src.clientX : src.clientY;
+      const maxLimit =
+        direction === "LR" ? window.innerWidth : window.innerHeight;
 
-      let prevSize;
-      let nextSize;
-      if (
-        start + props.collapseThreshold <= current &&
-        current <= end - props.collapseThreshold
-      ) {
-        // Between the sublings
-        prevSize = Math.round(clamp(current - halfSize) - start);
-        nextSize = end - start - props.size - prevSize;
-        prevEle.style[dimension] = `${prevSize}px`;
-        nextEle.style[dimension] = `${nextSize}px`;
+      const to = current > dragStartPoint ? "next" : "prev";
+      const moveDistance = Math.round(Math.abs(current - dragStartPoint));
+      if (moveDistance === distance || current < 0 || current > maxLimit)
+        return; //if no move gt 1px, don't calc
 
-        clearCollapsePropertiesOfAdjacent();
-      } else {
-        let sizeDict = {};
-        if (
-          current < start + props.collapseThreshold &&
-          props.prevCollapsible
-        ) {
-          sizeDict = collapsePanel("prev");
-        } else if (
-          current > end - props.collapseThreshold &&
-          props.nextCollapsible
-        ) {
-          sizeDict = collapsePanel("next");
-        }
-        prevSize = sizeDict["prevSize"];
-        nextSize = sizeDict["nextSize"];
-      }
+      distance = moveDistance;
+      const newSizeObj = calcPanelsSize(to, distance);
+
+      // Set value
+      newSizeObj.sizeList.forEach((item) => {
+        item.ele.style[dimension] = `${item.newSize}px`;
+        console.debug(`${item.ele.id} ${item.oldSize} ${item.newSize}`);
+      });
+
+      // Get old size of opposite element
+      const oppositeItem = (
+        to === "next" ? prevSiblingSizeList : nextSiblingSizeList
+      )[0];
+      const opOldSize = oppositeItem.size;
+      const opNewSize = opOldSize + (distance + newSizeObj.offset);
+      oppositeItem.ele.style[dimension] = `${opNewSize}px`;
+      changeCollapsePropertiesOfPanel(
+        oppositeItem.ele,
+        opNewSize === oppositeItem.collapsedSize ? "add" : "remove"
+      );
+      console.debug(
+        `Opposite Ele: ${opOldSize} -> ${opNewSize} (${opNewSize - opOldSize})`
+      );
 
       updateInfo();
-
-      console.debug(
-        `Range:${Math.round(start)}-${Math.round(end)} | Current:${Math.round(
-          current
-        )}`
-      );
     };
     document.onmousemove = dragMove;
     document.ontouchmove = dragMove;
@@ -459,6 +618,7 @@ const initHandler = (
 
     // -------------------- Drag end - START
     const dragEnd = () => {
+      console.debug(`🏁 Drag End`);
       document.onmousemove = null;
       document.ontouchmove = null;
       document.onmouseup = null;
@@ -468,7 +628,7 @@ const initHandler = (
       handler.classList.remove("dragging");
 
       setCollapseStatusOfSiblings();
-      freezeNonAdjacentElements("unfreeze");
+      // freezeNonAdjacentElements("unfreeze");
 
       // Save panel size
       saveAllPanelsSize();
@@ -486,7 +646,8 @@ const initHandler = (
   // -------------------- Collapse Previous - START
   const clickCollapsePanelBtn = (e: Event): void => {
     const btnEle = e.target as Element;
-    // console.debug("🎈 Collapse Btn", e, btnEle.classList);
+    const transitionDuration = 1000;
+    console.debug("🎈 Collapse Btn", e, btnEle.classList);
     e.stopPropagation();
     // freezeNonAdjacentElements("freeze");
 
@@ -508,27 +669,17 @@ const initHandler = (
     ) {
       console.debug(`✅ Expand -> ${btnDir}`); // expand --------------------
       expandPanel(btnDir);
+      addPanelTransition("expand-transition", transitionDuration);
     } else {
       console.debug(`✅ Collapse -> ${btnDir}`); // collapse --------------------
       // Store the size of expand status
-      saveAdjacentSize();
+      saveAllPanelsSize(lsBeforeCollapseKey);
 
       collapsePanel(btnDir);
+      addPanelTransition("collapse-transition", transitionDuration);
     }
 
-    // Add transition of neighbor
-    const targetHdl = btnDir === "prev" ? prevHdl : nextHdl;
-    prevEle.classList.add("collapse-transition");
-    nextEle.classList.add("collapse-transition");
-    handler.classList.add("collapse-transition");
-    targetHdl?.classList.add("collapse-transition");
-
     setTimeout(() => {
-      prevEle.classList.remove("collapse-transition");
-      nextEle.classList.remove("collapse-transition");
-      handler.classList.remove("collapse-transition");
-      targetHdl?.classList.remove("collapse-transition");
-
       /**
        * If the :has selector is used, the previous configuration is sufficient.
        * Handler preceding the collapsed ele is .resize-handler:has(+ .collapsed)
@@ -537,7 +688,7 @@ const initHandler = (
       setCollapseStatusOfSiblings();
       // freezeNonAdjacentElements("unfreeze");
       saveAllPanelsSize();
-    }, 1000);
+    }, transitionDuration);
   };
   handler.querySelectorAll(".collapse-btn").forEach((btn) => {
     btn.addEventListener("click", clickCollapsePanelBtn);
@@ -552,49 +703,52 @@ const initHandler = (
    */
   const setActualSizeOfSiblings = () => {
     console.group("Set Actual Size of Siblings");
-    let parentSize = 0;
     let collapsedPanelList: { ele: HTMLElement; size: number }[] = [];
     let expandedPanelList: { ele: HTMLElement; size: number }[] = [];
-    let siblingsSizeTotal = 0;
+    let panelSizeBefore = 0; // all panel total
+    let panelSizeAfter = 0; // all panel total(adjust collapsed panel)
     // Get size of all siblings
     getSiblings().forEach((ele) => {
       // Minus handler size (without flex)
       if (isHandler(ele)) return;
 
       const rect = ele.getBoundingClientRect();
-      parentSize += rect[dimension];
-      const size =
-        rect[dimension] <= props.collapsedSize + 10
-          ? props.collapsedSize
-          : rect[dimension]; // collapse tiny
-      if (size === props.collapsedSize) {
+      panelSizeBefore += rect[dimension];
+      const CS = getCS(ele);
+      // If size close to CS, set it as CS, otherwise, keep it.
+      const size = rect[dimension] <= CS + 10 ? CS : rect[dimension];
+      if (size === CS) {
         collapsedPanelList.push({ ele: ele, size: size });
       } else {
         expandedPanelList.push({ ele: ele, size: size });
       }
-      siblingsSizeTotal += size; // fill parent container
+      panelSizeAfter += size; // fill parent container
     });
     console.debug(
-      `Sibling size total: ${siblingsSizeTotal} | Parent: ${parentSize}`
+      `Panel size: Before=${panelSizeBefore} After=${panelSizeAfter}`
     );
 
     /**
      * Set size of all siblings
      * Prevent the last panel left 1px caused by Math.round of the previous panel
-     * Set the zero size first, then calculate the non-zero sizes.  */
+     * Set the collapsed size first, then calculate the expanded sizes.  */
     collapsedPanelList.forEach((item) => {
-      item.ele.style[dimension] = `${props.collapsedSize}px`;
-      parentSize -= props.collapsedSize;
+      const CS = getCS(item.ele);
+      item.ele.style[dimension] = `${CS}px`;
+      panelSizeBefore -= CS;
+      panelSizeAfter -= CS;
     });
-    const ratio = parentSize / siblingsSizeTotal;
+
+    const ratio = panelSizeBefore / panelSizeAfter;
+    console.debug("ratio:", ratio);
     for (let i = 0; i < expandedPanelList.length; i++) {
       const item = expandedPanelList[i];
       let size = 0;
       if (i < expandedPanelList.length - 1) {
         size = Math.round(item.size * ratio);
-        parentSize -= size;
+        panelSizeBefore -= size;
       } else {
-        size = parentSize; // The final panel uses all the remaining space
+        size = panelSizeBefore; // The final panel uses all the remaining space
       }
       item.ele.style[dimension] = size + "px";
       console.debug(`Set sibling [${item.ele.id}] ${item.size} -> ${size}px`);
@@ -603,25 +757,11 @@ const initHandler = (
   };
   // ------------------------------ Write all siblings' size - END
 
-  // ------------------------------ Update all siblings' info - START
-  const updateInfoOfSiblings = () => {
-    for (let ele of getSiblings()) {
-      if (isHandler(ele)) {
-        const prevEle = ele.previousElementSibling as HTMLElement;
-        const nextEle = ele.nextElementSibling as HTMLElement;
-        const prevRect = prevEle?.getBoundingClientRect(); // for calc direction
-        const nextRect = nextEle?.getBoundingClientRect(); // for calc direction
-        const prevInfo = ele.querySelector(".panel-info.prev") as HTMLElement;
-        const nextInfo = ele.querySelector(".panel-info.next") as HTMLElement;
-        prevInfo.textContent = `${Math.round(prevRect[dimension] * 100) / 100}`;
-        nextInfo.textContent = `${Math.round(nextRect[dimension] * 100) / 100}`;
-      }
-    }
-  };
-  // ------------------------------ Update all siblings' info - END
-
   // ------------------------------ Modify siblings' collapsed status - START
   const setCollapseStatusOfSiblings = () => {
+    setActualSizeOfSiblings();
+    updateInfoOfSiblings();
+
     const siblingList = getSiblings();
     // console.debug("siblingList:", siblingList);
     for (let i = 0; i < siblingList.length; i++) {
@@ -629,69 +769,34 @@ const initHandler = (
       if (isHandler(ele)) continue; //watch panels only
       const size = ele.getBoundingClientRect()[dimension];
       // console.debug("size:", size, ele.id, i);
-      const attrMinSize = ele.getAttribute("data-collapsed-size");
-      const minSize = attrMinSize ? parseInt(attrMinSize) : 10;
-      if (size <= minSize + 10) {
-        console.debug("👻 Collapsed panel found:", ele);
-        // Set very tiny panel to collapsed
-        if (!isHandler(ele)) {
-          ele.classList.add("panel-collapsed");
-        }
-        // Set property of prev handler
-        if (i > 0 && isHandler(siblingList[i - 1])) {
-          siblingList[i - 1].classList.add("next-panel-collapsed");
-        }
-        // Set property of next handler
-        if (i + 1 < siblingList.length && isHandler(siblingList[i + 1])) {
-          siblingList[i + 1].classList.add("prev-panel-collapsed");
-        }
-      } else {
-        // Set very tiny panel to collapsed
-        if (!isHandler(ele)) {
-          ele.classList.remove("panel-collapsed");
-        }
-        // Set property of prev handler
-        if (i > 0 && isHandler(siblingList[i - 1])) {
-          siblingList[i - 1].classList.remove("next-panel-collapsed");
-        }
-        // Set property of next handler
-        if (i + 1 < siblingList.length && isHandler(siblingList[i + 1])) {
-          siblingList[i + 1].classList.remove("prev-panel-collapsed");
-        }
-      }
+      const CS = getCS(ele);
+      changeCollapsePropertiesOfPanel(ele, size <= CS + 10 ? "add" : "remove");
     }
-    setActualSizeOfSiblings();
-    updateInfoOfSiblings();
   };
   // ------------------------------ Modify siblings' collapsed status - END
 
   // ------------------------------ Store & Restore Panel Size - START
-  const saveAllPanelsSize = (): void => {
-    console.group("💾 Save All Panel's Size");
-    const siblingList = getSiblings();
-    for (let ele of siblingList) {
+  // 👇🏻 key means whether to save the size of all panels or un-collapsed panels
+  const saveAllPanelsSize = (key: string = lsKey): void => {
+    console.group("💾 Save All Panel's Size, key:", key);
+    for (let ele of getSiblings()) {
       if (isHandler(ele)) continue;
       if (ele.id) {
-        let sizeInfo: SizeObj = {
-          [dimension]: ele.getBoundingClientRect()[dimension],
-        };
-        saveSize(ele.id, sizeInfo);
+        const size = ele.getBoundingClientRect()[dimension];
+
+        // While save the size before collapsed, don't save the collapsed size.
+        if (key === lsBeforeCollapseKey) {
+          const CS = getCS(ele);
+          if (size < CS + 10) continue; //don't save collapsed panel
+        }
+
+        let sizeInfo: SizeObj = { [dimension]: size };
+        saveSize(ele.id, sizeInfo, key);
         // console.debug(`Save Size: ele.id=${ele.id}`, sizeInfo);
       }
     }
-    console.debug(loadSize());
+    // console.debug(loadSize());
     console.groupEnd();
-  };
-
-  const saveAdjacentSize = () => {
-    const prevSize = prevEle.getBoundingClientRect()[dimension];
-    if (prevSize > prevCollapsedSize + 10) {
-      saveSize(prevEle.id, { [dimension]: prevSize }, lsBeforeCollapseKey);
-    }
-    const nextSize = nextEle.getBoundingClientRect()[dimension];
-    if (nextSize > nextCollapsedSize + 10) {
-      saveSize(nextEle.id, { [dimension]: nextSize }, lsBeforeCollapseKey);
-    }
   };
 
   const restoreAllPanelSize = () => {
@@ -715,9 +820,9 @@ const initHandler = (
   // ------------------------------ Store & Restore Panel Size - END
 
   updateInfoOfSiblings();
-  console.groupEnd(); // init end
+  console.groupEnd(); // Init end
 };
-// ------------------------------ init - END
+// ------------------------------ Init - END
 
 onMounted(() => {
   console.debug("🎯🎯🎯 Mounted", refHandler.value);
@@ -948,6 +1053,11 @@ onMounted(() => {
       transition: opacity 0.2s, transform 0.2s var(--fadein);
     }
   }
+
+  // If both side panel are collapsed, hide btn
+  &.prev-panel-collapsed.next-panel-collapsed .collapse-btn {
+    display: none !important;
+  }
   // ------------------------------ Collapse Button - END
 
   // ------------------------------ Info box - START
@@ -1018,8 +1128,6 @@ onMounted(() => {
 // ------------------------------ Parent
 .handler-wrapper {
   display: flex;
-  width: 100%;
-  height: 100%;
   & > * {
     flex-grow: 1; // The children will expand and fill the wrapper
   }
@@ -1057,7 +1165,7 @@ onMounted(() => {
 
   // ------------------------------ Collapsed handler - START
   .panel-collapsed-view {
-    background: red;
+    background: #fff;
     z-index: 99;
     user-select: normal;
     opacity: 1;
@@ -1081,14 +1189,21 @@ onMounted(() => {
   opacity: 0;
   z-index: -1;
   user-select: none;
+  overflow: hidden;
 }
 
 // Apply animation to the panel while collapsing and expanding.
-.collapse-transition {
-  --fadein: cubic-bezier(0.25, 0.1, 0.5, 1.5);
+.collapse-transition,
+.expand-transition {
   transition: width var(--fadein) 0.5s, height var(--fadein) 0.5s !important;
   min-width: unset !important;
   min-height: unset !important;
+}
+.collapse-transition {
+  --fadein: cubic-bezier(0.25, 1, 0.5, 1.1);
+}
+.expand-transition {
+  --fadein: cubic-bezier(0.25, 1, 0.5, 1.5);
 }
 .drag-transition {
   transition: width 0.1s, height 0.1s;
