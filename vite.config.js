@@ -12,7 +12,7 @@ export default defineConfig({
   },
   base: "./",
   server: {
-    host: ["localhost", "127.0.0.1"],
+    host: "0.0.0.0",
   },
 
   // build
