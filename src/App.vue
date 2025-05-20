@@ -1,7 +1,7 @@
 <template>
   <div id="main-wrapper">
     <Sidebar id="sidebar-wrapper" />
-    <resizeHandler />
+    <resizeHandle />
     <Preview id="preview-wrapper" />
   </div>
 </template>
@@ -13,7 +13,7 @@ const store = useStore();
 
 import Sidebar from "@/components/Sidebar.vue";
 import Preview from "@/components/Preview.vue";
-import resizeHandler from "@/components/utils/resizeHandler.vue";
+import resizeHandle from "@/components/utils/resizeHandle.vue";
 </script>
 
 <style lang="scss">
