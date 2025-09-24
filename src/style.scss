@@ -57,7 +57,7 @@ input {
 textarea:hover,
 textarea:focus {
   height: calc(var(--input-height) * 3);
-  transition: height 0.2s 2s;
+  transition: height 0.2s 1s;
 }
 input[type="checkbox"] {
   width: var(--input-height);
@@ -71,7 +71,7 @@ button {
   line-height: var(--input-height);
   border: none;
   cursor: pointer;
-  // background: transparent;
+  // background: transparent;background
   transition: color 0.3s;
   &:hover {
     color: #06f;
@@ -111,13 +111,13 @@ button {
     &::after {
       content: "";
 
-      // position: absolute;
+      // position: absolute;position
 
       display: block;
 
-      // left:0;
-      // right:0;
-      // bottom: 0;
+      // left:0;left
+      // right:0;right
+      // bottom: 0;bottom
       width: 0;
       margin-left: 50%;
       margin-top: -0.2rem;

@@ -29,13 +29,13 @@ importers:
     devDependencies:
       '@vitejs/plugin-vue':
         specifier: ^5.2.4
-        version: 5.2.4(vite@6.3.5(sass@1.89.0))(vue@3.5.14)
+        version: 5.2.4(vite@6.3.6(sass@1.89.0))(vue@3.5.14)
       sass:
         specifier: ^1.89.0
         version: 1.89.0
       vite:
-        specifier: ^6.3.5
-        version: 6.3.5(sass@1.89.0)
+        specifier: ^6.3.6
+        version: 6.3.6(sass@1.89.0)
 
 packages:
 
@@ -991,8 +991,8 @@ packages:
   util-deprecate@1.0.2:
     resolution: {integrity: sha512-EPD5q1uXyFxJpCrLnCc1nHnq3gOa6DZBocAIiI2TaSCA7VCJ1UJDMagCzIkXNsUYfD1daK//LTEQ8xiIbrHtcw==}
 
-  vite@6.3.5:
-    resolution: {integrity: sha512-cZn6NDFE7wdTpINgs++ZJ4N49W2vRp8LCKrn3Ob1kYNtOo21vfDoaV5GzBfLU4MovSAB8uNRm4jgzVQZ+mBzPQ==}
+  vite@6.3.6:
+    resolution: {integrity: sha512-0msEVHJEScQbhkbVTb/4iHZdJ6SXp/AvxL2sjwYQFfBqleHtnCqv1J3sa9zbWz/6kW1m9Tfzn92vW+kZ1WV6QA==}
     engines: {node: ^18.0.0 || ^20.0.0 || >=22.0.0}
     hasBin: true
     peerDependencies:
@@ -1312,9 +1312,9 @@ snapshots:
 
   '@types/estree@1.0.7': {}
 
-  '@vitejs/plugin-vue@5.2.4(vite@6.3.5(sass@1.89.0))(vue@3.5.14)':
+  '@vitejs/plugin-vue@5.2.4(vite@6.3.6(sass@1.89.0))(vue@3.5.14)':
     dependencies:
-      vite: 6.3.5(sass@1.89.0)
+      vite: 6.3.6(sass@1.89.0)
       vue: 3.5.14
 
   '@vue/compiler-core@3.5.14':
@@ -1889,7 +1889,7 @@ snapshots:
 
   util-deprecate@1.0.2: {}
 
-  vite@6.3.5(sass@1.89.0):
+  vite@6.3.6(sass@1.89.0):
     dependencies:
       esbuild: 0.25.4
       fdir: 6.4.4(picomatch@4.0.2)

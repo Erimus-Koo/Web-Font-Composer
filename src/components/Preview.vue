@@ -27,19 +27,17 @@
       <div v-if="store.previewTabActive === 'Font Preview'">
         <PreviewOption />
         <div class="preview">
-          <div v-for="w in 9" :key="w">
-            <code>{{ w }}00</code>
+          <div v-for="w in 18" :key="w">
+            <code>{{ String(w * 50).padStart(3, "0") }}</code>
             <span
-              :style="
-                'font-weight:' +
-                w +
-                '00;font-size:' +
-                store.fontSize +
-                'px;' +
-                (store.isItalic ? 'font-style: italic;' : '')
-              "
-              >{{ store.sampleText }}</span
+              :style="`
+                font-weight: ${w * 50};
+                font-size: ${store.fontSize}px;
+                ${store.isItalic ? 'font-style: italic;' : ''}
+              `"
             >
+              {{ store.sampleText }}
+            </span>
           </div>
         </div>
       </div>
@@ -101,5 +99,9 @@ const debugPreviewOption = {
 }
 .preview {
   padding: 1rem;
+
+  code {
+    margin-right: 1ch;
+  }
 }
 </style>
